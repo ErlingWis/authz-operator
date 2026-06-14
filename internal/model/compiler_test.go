@@ -114,8 +114,8 @@ func TestCompile(t *testing.T) {
 
 func TestCompileRejectsDuplicateResources(t *testing.T) {
 	components := []authv1.AuthorizationComponent{
-		component("first", "project"),
-		component("second", "project"),
+		component("first"),
+		component("second"),
 	}
 
 	if _, err := Compile(components); err == nil {
@@ -124,7 +124,7 @@ func TestCompileRejectsDuplicateResources(t *testing.T) {
 }
 
 func TestCompileRejectsUnknownPermissionReference(t *testing.T) {
-	authComponent := component("project-auth", "project")
+	authComponent := component("project-auth")
 	authComponent.Spec.Permissions = map[string]authv1.AuthorizationPermission{
 		"view": {AnyOf: []string{"missing"}},
 	}
@@ -135,12 +135,12 @@ func TestCompileRejectsUnknownPermissionReference(t *testing.T) {
 }
 
 func TestHashIsStable(t *testing.T) {
-	first := component("project-auth", "project")
+	first := component("project-auth")
 	first.Spec.Roles["editor"] = authv1.AuthorizationRole{
 		Subjects: []authv1.AuthorizationSubject{{Type: "group", Relation: "member"}, {Type: "user"}},
 	}
 
-	second := component("project-auth", "project")
+	second := component("project-auth")
 	second.Spec.Roles["editor"] = authv1.AuthorizationRole{
 		Subjects: []authv1.AuthorizationSubject{{Type: "user"}, {Type: "group", Relation: "member"}},
 	}
@@ -177,7 +177,7 @@ func TestHashIsStable(t *testing.T) {
 }
 
 func TestMarshalWriteRequestValidatesAgainstOpenFGASDK(t *testing.T) {
-	authorizationModel, err := Compile([]authv1.AuthorizationComponent{component("project-auth", "project")})
+	authorizationModel, err := Compile([]authv1.AuthorizationComponent{component("project-auth")})
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
@@ -202,11 +202,11 @@ func TestMarshalWriteRequestValidatesAgainstOpenFGASDK(t *testing.T) {
 	}
 }
 
-func component(name, resource string) authv1.AuthorizationComponent {
+func component(name string) authv1.AuthorizationComponent {
 	return authv1.AuthorizationComponent{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "platform"},
 		Spec: authv1.AuthorizationComponentSpec{
-			Resource: resource,
+			Resource: "project",
 			Roles: map[string]authv1.AuthorizationRole{
 				"owner": {
 					Subjects: []authv1.AuthorizationSubject{{Type: "user"}},

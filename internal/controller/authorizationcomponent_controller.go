@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,13 +35,19 @@ import (
 // AuthorizationComponentReconciler reconciles a AuthorizationComponent object
 type AuthorizationComponentReconciler struct {
 	client.Client
-	Scheme        *runtime.Scheme
-	ModelFilePath string
+	Scheme *runtime.Scheme
 }
+
+const (
+	authorizationModelConfigMapName = "bridder-authorization-model"
+	authorizationModelConfigMapKey  = "authorization-model.json"
+	authorizationModelHashKey       = "modelHash"
+)
 
 // +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationcomponents,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationcomponents/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationcomponents/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch
 
 func (r *AuthorizationComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -54,7 +61,7 @@ func (r *AuthorizationComponentReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	var components authv1.AuthorizationComponentList
-	if err := r.List(ctx, &components); err != nil {
+	if err := r.List(ctx, &components, client.InNamespace(req.Namespace)); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -81,11 +88,11 @@ func (r *AuthorizationComponentReconciler) Reconcile(ctx context.Context, req ct
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := model.WriteFile(r.ModelFilePath, modelJSON); err != nil {
+	if err := r.applyAuthorizationModelConfigMap(ctx, req.Namespace, modelJSON, modelHash); err != nil {
 		if statusErr := r.patchStatus(ctx, req.NamespacedName, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
-			Reason:             "ModelFileWriteFailed",
+			Reason:             "ModelConfigMapApplyFailed",
 			Message:            err.Error(),
 			ObservedGeneration: component.Generation,
 		}, ""); statusErr != nil {
@@ -104,9 +111,33 @@ func (r *AuthorizationComponentReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, err
 	}
 
-	log.Info("Compiled authorization model", "authorizationComponentCount", len(components.Items), "modelHash", modelHash, "modelFilePath", r.ModelFilePath)
+	log.Info("Compiled authorization model", "authorizationComponentCount", len(components.Items), "modelHash", modelHash, "configMap", authorizationModelConfigMapName)
 
 	return ctrl.Result{}, nil
+}
+
+func (r *AuthorizationComponentReconciler) applyAuthorizationModelConfigMap(ctx context.Context, namespace string, modelJSON []byte, modelHash string) error {
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      authorizationModelConfigMapName,
+			Namespace: namespace,
+		},
+	}
+	_, err := ctrl.CreateOrUpdate(ctx, r.Client, configMap, func() error {
+		if configMap.Labels == nil {
+			configMap.Labels = map[string]string{}
+		}
+		configMap.Labels["app.kubernetes.io/name"] = "bridder"
+		configMap.Labels["app.kubernetes.io/managed-by"] = "bridder-controller"
+
+		if configMap.Data == nil {
+			configMap.Data = map[string]string{}
+		}
+		configMap.Data[authorizationModelConfigMapKey] = string(modelJSON)
+		configMap.Data[authorizationModelHashKey] = modelHash
+		return nil
+	})
+	return err
 }
 
 func (r *AuthorizationComponentReconciler) patchStatus(ctx context.Context, namespacedName types.NamespacedName, condition metav1.Condition, modelHash string) error {

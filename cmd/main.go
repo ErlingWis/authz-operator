@@ -179,9 +179,8 @@ func main() {
 	}
 
 	if err := (&controller.AuthorizationComponentReconciler{
-		Client:        mgr.GetClient(),
-		Scheme:        mgr.GetScheme(),
-		ModelFilePath: os.Getenv("OPENFGA_MODEL_FILE"),
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "authorizationcomponent")
 		os.Exit(1)

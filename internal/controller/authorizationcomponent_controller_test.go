@@ -19,11 +19,10 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -79,9 +78,8 @@ var _ = Describe("AuthorizationComponent Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &AuthorizationComponentReconciler{
-				Client:        k8sClient,
-				Scheme:        k8sClient.Scheme(),
-				ModelFilePath: filepath.Join(GinkgoT().TempDir(), "authorization-model.json"),
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -98,9 +96,13 @@ var _ = Describe("AuthorizationComponent Controller", func() {
 				HaveField("Reason", "ModelCompiled"),
 			)))
 
-			modelJSON, err := os.ReadFile(controllerReconciler.ModelFilePath)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(json.Valid(modelJSON)).To(BeTrue())
+			var configMap corev1.ConfigMap
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      authorizationModelConfigMapName,
+				Namespace: typeNamespacedName.Namespace,
+			}, &configMap)).To(Succeed())
+			Expect(configMap.Data[authorizationModelHashKey]).To(Equal(reconciled.Status.ObservedModelHash))
+			Expect(json.Valid([]byte(configMap.Data[authorizationModelConfigMapKey]))).To(BeTrue())
 		})
 	})
 })
