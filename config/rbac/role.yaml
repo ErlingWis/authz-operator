@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - auth.bridder.io
+  resources:
+  - authorizationcomponents
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - auth.bridder.io
+  resources:
+  - authorizationcomponents/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - auth.bridder.io
+  resources:
+  - authorizationcomponents/status
+  verbs:
+  - get
+  - patch
+  - update

@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- auth_v1_authorizationcomponent.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

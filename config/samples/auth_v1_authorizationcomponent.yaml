@@ -1,0 +1,29 @@
+apiVersion: auth.bridder.io/v1
+kind: AuthorizationComponent
+metadata:
+  labels:
+    app.kubernetes.io/name: bridder
+    app.kubernetes.io/managed-by: kustomize
+  name: project-authorization
+spec:
+  resource: project
+  topology:
+    parent:
+      resource: organization
+  roles:
+    owner:
+      subjects:
+        - type: user
+    editor:
+      subjects:
+        - type: user
+        - type: group
+          relation: member
+  permissions:
+    view:
+      anyOf:
+        - owner
+        - editor
+    delete:
+      anyOf:
+        - owner
