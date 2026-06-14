@@ -15,7 +15,7 @@ resources:
   controller: true
   domain: bridder.io
   group: auth
-  kind: AuthorizationComponent
+  kind: AuthorizationModule
   path: my.domain/fga/api/v1
   version: v1
 version: "3"

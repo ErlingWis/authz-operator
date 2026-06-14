@@ -27,9 +27,9 @@ import (
 )
 
 func TestCompile(t *testing.T) {
-	component := authv1.AuthorizationComponent{
+	module := authv1.AuthorizationModule{
 		ObjectMeta: metav1.ObjectMeta{Name: "project-auth", Namespace: "platform"},
-		Spec: authv1.AuthorizationComponentSpec{
+		Spec: authv1.AuthorizationModuleSpec{
 			Resource: "project",
 			Topology: &authv1.AuthorizationTopology{
 				Parent: &authv1.ParentResource{Resource: "organization"},
@@ -56,7 +56,7 @@ func TestCompile(t *testing.T) {
 		},
 	}
 
-	got, err := Compile([]authv1.AuthorizationComponent{component})
+	got, err := Compile([]authv1.AuthorizationModule{module})
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
@@ -113,43 +113,43 @@ func TestCompile(t *testing.T) {
 }
 
 func TestCompileRejectsDuplicateResources(t *testing.T) {
-	components := []authv1.AuthorizationComponent{
-		component("first"),
-		component("second"),
+	modules := []authv1.AuthorizationModule{
+		module("first"),
+		module("second"),
 	}
 
-	if _, err := Compile(components); err == nil {
+	if _, err := Compile(modules); err == nil {
 		t.Fatal("Compile() error = nil, want duplicate resource error")
 	}
 }
 
 func TestCompileRejectsUnknownPermissionReference(t *testing.T) {
-	authComponent := component("project-auth")
-	authComponent.Spec.Permissions = map[string]authv1.AuthorizationPermission{
+	authModule := module("project-auth")
+	authModule.Spec.Permissions = map[string]authv1.AuthorizationPermission{
 		"view": {AnyOf: []string{"missing"}},
 	}
 
-	if _, err := Compile([]authv1.AuthorizationComponent{authComponent}); err == nil {
+	if _, err := Compile([]authv1.AuthorizationModule{authModule}); err == nil {
 		t.Fatal("Compile() error = nil, want unknown relation error")
 	}
 }
 
 func TestHashIsStable(t *testing.T) {
-	first := component("project-auth")
+	first := module("project-auth")
 	first.Spec.Roles["editor"] = authv1.AuthorizationRole{
 		Subjects: []authv1.AuthorizationSubject{{Type: "group", Relation: "member"}, {Type: "user"}},
 	}
 
-	second := component("project-auth")
+	second := module("project-auth")
 	second.Spec.Roles["editor"] = authv1.AuthorizationRole{
 		Subjects: []authv1.AuthorizationSubject{{Type: "user"}, {Type: "group", Relation: "member"}},
 	}
 
-	firstModel, err := Compile([]authv1.AuthorizationComponent{first})
+	firstModel, err := Compile([]authv1.AuthorizationModule{first})
 	if err != nil {
 		t.Fatalf("Compile(first) error = %v", err)
 	}
-	secondModel, err := Compile([]authv1.AuthorizationComponent{second})
+	secondModel, err := Compile([]authv1.AuthorizationModule{second})
 	if err != nil {
 		t.Fatalf("Compile(second) error = %v", err)
 	}
@@ -177,7 +177,7 @@ func TestHashIsStable(t *testing.T) {
 }
 
 func TestMarshalWriteRequestValidatesAgainstOpenFGASDK(t *testing.T) {
-	authorizationModel, err := Compile([]authv1.AuthorizationComponent{component("project-auth")})
+	authorizationModel, err := Compile([]authv1.AuthorizationModule{module("project-auth")})
 	if err != nil {
 		t.Fatalf("Compile() error = %v", err)
 	}
@@ -202,10 +202,10 @@ func TestMarshalWriteRequestValidatesAgainstOpenFGASDK(t *testing.T) {
 	}
 }
 
-func component(name string) authv1.AuthorizationComponent {
-	return authv1.AuthorizationComponent{
+func module(name string) authv1.AuthorizationModule {
+	return authv1.AuthorizationModule{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "platform"},
-		Spec: authv1.AuthorizationComponentSpec{
+		Spec: authv1.AuthorizationModuleSpec{
 			Resource: "project",
 			Roles: map[string]authv1.AuthorizationRole{
 				"owner": {

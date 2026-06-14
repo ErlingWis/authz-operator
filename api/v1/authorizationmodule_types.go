@@ -20,9 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// AuthorizationComponentSpec defines the desired state of AuthorizationComponent
-type AuthorizationComponentSpec struct {
-	// resource is the OpenFGA object type this component contributes.
+// AuthorizationModuleSpec defines the desired state of AuthorizationModule
+type AuthorizationModuleSpec struct {
+	// resource is the OpenFGA object type this module contributes.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9_]*$`
@@ -89,13 +89,13 @@ type AuthorizationPermission struct {
 	AnyOf []string `json:"anyOf"`
 }
 
-// AuthorizationComponentStatus defines the observed state of AuthorizationComponent.
-type AuthorizationComponentStatus struct {
+// AuthorizationModuleStatus defines the observed state of AuthorizationModule.
+type AuthorizationModuleStatus struct {
 	// observedModelHash is the hash of the compiled authorization model observed by the controller.
 	// +optional
 	ObservedModelHash string `json:"observedModelHash,omitempty"`
 
-	// conditions represent the current state of the AuthorizationComponent resource.
+	// conditions represent the current state of the AuthorizationModule resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
 	//
 	// Standard condition types include:
@@ -113,32 +113,32 @@ type AuthorizationComponentStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// AuthorizationComponent is the Schema for the authorizationcomponents API
-type AuthorizationComponent struct {
+// AuthorizationModule is the Schema for the authorizationmodules API
+type AuthorizationModule struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitzero"`
 
-	// spec defines the desired state of AuthorizationComponent
+	// spec defines the desired state of AuthorizationModule
 	// +required
-	Spec AuthorizationComponentSpec `json:"spec"`
+	Spec AuthorizationModuleSpec `json:"spec"`
 
-	// status defines the observed state of AuthorizationComponent
+	// status defines the observed state of AuthorizationModule
 	// +optional
-	Status AuthorizationComponentStatus `json:"status,omitzero"`
+	Status AuthorizationModuleStatus `json:"status,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// AuthorizationComponentList contains a list of AuthorizationComponent
-type AuthorizationComponentList struct {
+// AuthorizationModuleList contains a list of AuthorizationModule
+type AuthorizationModuleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitzero"`
-	Items           []AuthorizationComponent `json:"items"`
+	Items           []AuthorizationModule `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&AuthorizationComponent{}, &AuthorizationComponentList{})
+	SchemeBuilder.Register(&AuthorizationModule{}, &AuthorizationModuleList{})
 }

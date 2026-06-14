@@ -1,5 +1,19 @@
 apiVersion: auth.bridder.io/v1
-kind: AuthorizationComponent
+kind: AuthorizationModule
+metadata:
+  labels:
+    app.kubernetes.io/name: bridder
+    app.kubernetes.io/managed-by: kustomize
+  name: group-authorization
+spec:
+  resource: group
+  roles:
+    member:
+      subjects:
+        - type: user
+---
+apiVersion: auth.bridder.io/v1
+kind: AuthorizationModule
 metadata:
   labels:
     app.kubernetes.io/name: bridder

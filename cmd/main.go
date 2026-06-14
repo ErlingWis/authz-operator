@@ -178,11 +178,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.AuthorizationComponentReconciler{
+	if err := (&controller.AuthorizationModuleReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "Failed to create controller", "controller", "authorizationcomponent")
+		setupLog.Error(err, "Failed to create controller", "controller", "authorizationmodule")
+		os.Exit(1)
+	}
+	if err := (&controller.AuthorizationModelPublisherReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "Failed to create controller", "controller", "authorizationmodelpublisher")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

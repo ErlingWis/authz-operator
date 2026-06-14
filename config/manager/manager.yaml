@@ -63,6 +63,11 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
+        env:
+        - name: OPENFGA_API_URL
+          value: http://bridder-openfga:8080
+        - name: OPENFGA_STORE_NAME
+          value: bridder
         image: controller:latest
         name: manager
         ports:

@@ -28,11 +28,11 @@ func TestAddToScheme(t *testing.T) {
 		t.Fatalf("AddToScheme() error = %v", err)
 	}
 
-	kinds, _, err := scheme.ObjectKinds(&AuthorizationComponent{})
+	kinds, _, err := scheme.ObjectKinds(&AuthorizationModule{})
 	if err != nil {
 		t.Fatalf("ObjectKinds() error = %v", err)
 	}
-	if len(kinds) != 1 || kinds[0].Group != "auth.bridder.io" || kinds[0].Version != "v1" || kinds[0].Kind != "AuthorizationComponent" {
-		t.Fatalf("ObjectKinds() = %#v, want auth.bridder.io/v1 AuthorizationComponent", kinds)
+	if len(kinds) != 1 || kinds[0].Group != "auth.bridder.io" || kinds[0].Version != "v1" || kinds[0].Kind != "AuthorizationModule" {
+		t.Fatalf("ObjectKinds() = %#v, want auth.bridder.io/v1 AuthorizationModule", kinds)
 	}
 }

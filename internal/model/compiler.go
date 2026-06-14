@@ -88,11 +88,11 @@ type UsersetUnion struct {
 	Child []Userset `json:"child"`
 }
 
-// Compile builds one deterministic OpenFGA authorization model from component specs.
-func Compile(components []authv1.AuthorizationComponent) (AuthorizationModel, error) {
+// Compile builds one deterministic OpenFGA authorization model from module specs.
+func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 	model := AuthorizationModel{SchemaVersion: schemaVersion}
 	types := map[string]*TypeDefinition{}
-	componentByResource := map[string]string{}
+	moduleByResource := map[string]string{}
 
 	ensureType := func(name string) *TypeDefinition {
 		if typeDef, ok := types[name]; ok {
@@ -103,33 +103,33 @@ func Compile(components []authv1.AuthorizationComponent) (AuthorizationModel, er
 		return typeDef
 	}
 
-	for _, component := range components {
-		resource := component.Spec.Resource
+	for _, module := range modules {
+		resource := module.Spec.Resource
 		if resource == "" {
-			return AuthorizationModel{}, fmt.Errorf("%s/%s: spec.resource is required", component.Namespace, component.Name)
+			return AuthorizationModel{}, fmt.Errorf("%s/%s: spec.resource is required", module.Namespace, module.Name)
 		}
-		if previous, ok := componentByResource[resource]; ok {
-			return AuthorizationModel{}, fmt.Errorf("resource %q is defined by both %s and %s/%s", resource, previous, component.Namespace, component.Name)
+		if previous, ok := moduleByResource[resource]; ok {
+			return AuthorizationModel{}, fmt.Errorf("resource %q is defined by both %s and %s/%s", resource, previous, module.Namespace, module.Name)
 		}
-		componentByResource[resource] = fmt.Sprintf("%s/%s", component.Namespace, component.Name)
+		moduleByResource[resource] = fmt.Sprintf("%s/%s", module.Namespace, module.Name)
 		ensureType(resource)
 
-		for _, role := range component.Spec.Roles {
+		for _, role := range module.Spec.Roles {
 			for _, subject := range role.Subjects {
 				if subject.Type != "" {
 					ensureType(subject.Type)
 				}
 			}
 		}
-		if component.Spec.Topology != nil && component.Spec.Topology.Parent != nil {
-			ensureType(component.Spec.Topology.Parent.Resource)
+		if module.Spec.Topology != nil && module.Spec.Topology.Parent != nil {
+			ensureType(module.Spec.Topology.Parent.Resource)
 		}
 	}
 
-	for i := range components {
-		component := components[i]
-		typeDef := ensureType(component.Spec.Resource)
-		if err := compileComponent(component, typeDef); err != nil {
+	for i := range modules {
+		module := modules[i]
+		typeDef := ensureType(module.Spec.Resource)
+		if err := compileModule(module, typeDef); err != nil {
 			return AuthorizationModel{}, err
 		}
 	}
@@ -190,14 +190,14 @@ func Hash(model AuthorizationModel) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func compileComponent(component authv1.AuthorizationComponent, typeDef *TypeDefinition) error {
+func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition) error {
 	relations := map[string]Userset{}
 	metadata := map[string]RelationMetadata{}
 
-	if component.Spec.Topology != nil && component.Spec.Topology.Parent != nil {
-		parent := component.Spec.Topology.Parent.Resource
+	if module.Spec.Topology != nil && module.Spec.Topology.Parent != nil {
+		parent := module.Spec.Topology.Parent.Resource
 		if parent == "" {
-			return fmt.Errorf("%s/%s: spec.topology.parent.resource is required", component.Namespace, component.Name)
+			return fmt.Errorf("%s/%s: spec.topology.parent.resource is required", module.Namespace, module.Name)
 		}
 		relations["parent"] = Userset{This: &ThisUserset{}}
 		metadata["parent"] = RelationMetadata{
@@ -205,10 +205,10 @@ func compileComponent(component authv1.AuthorizationComponent, typeDef *TypeDefi
 		}
 	}
 
-	roleNames := sortedKeys(component.Spec.Roles)
+	roleNames := sortedKeys(module.Spec.Roles)
 	for _, roleName := range roleNames {
-		role := component.Spec.Roles[roleName]
-		if err := validateRelationName(component, "role", roleName); err != nil {
+		role := module.Spec.Roles[roleName]
+		if err := validateRelationName(module, "role", roleName); err != nil {
 			return err
 		}
 		relations[roleName] = Userset{This: &ThisUserset{}}
@@ -217,16 +217,16 @@ func compileComponent(component authv1.AuthorizationComponent, typeDef *TypeDefi
 		}
 	}
 
-	permissionNames := sortedKeys(component.Spec.Permissions)
+	permissionNames := sortedKeys(module.Spec.Permissions)
 	for _, permissionName := range permissionNames {
-		permission := component.Spec.Permissions[permissionName]
-		if err := validateRelationName(component, "permission", permissionName); err != nil {
+		permission := module.Spec.Permissions[permissionName]
+		if err := validateRelationName(module, "permission", permissionName); err != nil {
 			return err
 		}
 		if _, exists := relations[permissionName]; exists {
-			return fmt.Errorf("%s/%s: permission %q conflicts with an existing relation", component.Namespace, component.Name, permissionName)
+			return fmt.Errorf("%s/%s: permission %q conflicts with an existing relation", module.Namespace, module.Name, permissionName)
 		}
-		userset, err := compilePermission(component, permissionName, permission, relations)
+		userset, err := compilePermission(module, permissionName, permission, relations)
 		if err != nil {
 			return err
 		}
@@ -240,15 +240,15 @@ func compileComponent(component authv1.AuthorizationComponent, typeDef *TypeDefi
 	return nil
 }
 
-func compilePermission(component authv1.AuthorizationComponent, name string, permission authv1.AuthorizationPermission, relations map[string]Userset) (Userset, error) {
+func compilePermission(module authv1.AuthorizationModule, name string, permission authv1.AuthorizationPermission, relations map[string]Userset) (Userset, error) {
 	if len(permission.AnyOf) == 0 {
-		return Userset{}, fmt.Errorf("%s/%s: permission %q must reference at least one relation", component.Namespace, component.Name, name)
+		return Userset{}, fmt.Errorf("%s/%s: permission %q must reference at least one relation", module.Namespace, module.Name, name)
 	}
 
 	children := make([]Userset, 0, len(permission.AnyOf))
 	for _, relation := range permission.AnyOf {
 		if _, ok := relations[relation]; !ok {
-			return Userset{}, fmt.Errorf("%s/%s: permission %q references unknown relation %q", component.Namespace, component.Name, name, relation)
+			return Userset{}, fmt.Errorf("%s/%s: permission %q references unknown relation %q", module.Namespace, module.Name, name, relation)
 		}
 		children = append(children, Userset{
 			ComputedUserset: &ObjectRelation{Object: "", Relation: relation},
@@ -274,12 +274,12 @@ func relationReferences(subjects []authv1.AuthorizationSubject) []RelationRefere
 	return references
 }
 
-func validateRelationName(component authv1.AuthorizationComponent, kind, name string) error {
+func validateRelationName(module authv1.AuthorizationModule, kind, name string) error {
 	if name == "" {
-		return fmt.Errorf("%s/%s: %s name is required", component.Namespace, component.Name, kind)
+		return fmt.Errorf("%s/%s: %s name is required", module.Namespace, module.Name, kind)
 	}
 	if strings.Contains(name, "#") {
-		return fmt.Errorf("%s/%s: %s %q must not contain #", component.Namespace, component.Name, kind, name)
+		return fmt.Errorf("%s/%s: %s %q must not contain #", module.Namespace, module.Name, kind, name)
 	}
 	return nil
 }

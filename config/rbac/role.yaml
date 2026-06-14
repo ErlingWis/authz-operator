@@ -18,7 +18,7 @@ rules:
 - apiGroups:
   - auth.bridder.io
   resources:
-  - authorizationcomponents
+  - authorizationmodules
   verbs:
   - create
   - delete
@@ -30,13 +30,13 @@ rules:
 - apiGroups:
   - auth.bridder.io
   resources:
-  - authorizationcomponents/finalizers
+  - authorizationmodules/finalizers
   verbs:
   - update
 - apiGroups:
   - auth.bridder.io
   resources:
-  - authorizationcomponents/status
+  - authorizationmodules/status
   verbs:
   - get
   - patch

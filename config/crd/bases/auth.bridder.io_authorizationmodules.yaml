@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
-  name: authorizationcomponents.auth.bridder.io
+  name: authorizationmodules.auth.bridder.io
 spec:
   group: auth.bridder.io
   names:
-    kind: AuthorizationComponent
-    listKind: AuthorizationComponentList
-    plural: authorizationcomponents
-    singular: authorizationcomponent
+    kind: AuthorizationModule
+    listKind: AuthorizationModuleList
+    plural: authorizationmodules
+    singular: authorizationmodule
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: AuthorizationComponent is the Schema for the authorizationcomponents
+        description: AuthorizationModule is the Schema for the authorizationmodules
           API
         properties:
           apiVersion:
@@ -38,7 +38,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of AuthorizationComponent
+            description: spec defines the desired state of AuthorizationModule
             properties:
               permissions:
                 additionalProperties:
@@ -58,7 +58,7 @@ spec:
                   roles or other permissions.
                 type: object
               resource:
-                description: resource is the OpenFGA object type this component contributes.
+                description: resource is the OpenFGA object type this module contributes.
                 minLength: 1
                 pattern: ^[a-z][a-z0-9_]*$
                 type: string
@@ -118,11 +118,11 @@ spec:
             - roles
             type: object
           status:
-            description: status defines the observed state of AuthorizationComponent
+            description: status defines the observed state of AuthorizationModule
             properties:
               conditions:
                 description: |-
-                  conditions represent the current state of the AuthorizationComponent resource.
+                  conditions represent the current state of the AuthorizationModule resource.
                   Each condition has a unique type and reflects the status of a specific aspect of the resource.
 
                   Standard condition types include:

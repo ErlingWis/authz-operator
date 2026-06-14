@@ -22,7 +22,6 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the bridder itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- authorizationcomponent_admin_role.yaml
-- authorizationcomponent_editor_role.yaml
-- authorizationcomponent_viewer_role.yaml
-
+- authorizationmodule_admin_role.yaml
+- authorizationmodule_editor_role.yaml
+- authorizationmodule_viewer_role.yaml
