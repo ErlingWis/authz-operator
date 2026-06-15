@@ -36,9 +36,11 @@ import (
 
 const (
 	openFGAAPIURLEnv          = "OPENFGA_API_URL"
+	openFGAAPITokenEnv        = "OPENFGA_API_TOKEN"
 	tupleListenerNamespaceEnv = "TUPLE_LISTENER_NAMESPACE"
 	tupleListenerReleaseEnv   = "TUPLE_LISTENER_RELEASE_NAME"
 	natsURLEnv                = "NATS_URL"
+	natsTokenEnv              = "NATS_TOKEN"
 	natsStreamEnv             = "NATS_STREAM"
 	natsSubjectEnv            = "NATS_SUBJECT"
 	natsConsumerEnv           = "NATS_CONSUMER"
@@ -72,12 +74,14 @@ func main() {
 			ReleaseName: envOrDefault(tupleListenerReleaseEnv, tuplewriter.DefaultReleaseName),
 		},
 		Writer: &tuplewriter.OpenFGAWriter{
-			APIURL: os.Getenv(openFGAAPIURLEnv),
+			APIURL:   os.Getenv(openFGAAPIURLEnv),
+			APIToken: os.Getenv(openFGAAPITokenEnv),
 		},
 	}
 
 	config := tuplelistener.NATSConfig{
 		URL:        os.Getenv(natsURLEnv),
+		Token:      os.Getenv(natsTokenEnv),
 		Stream:     os.Getenv(natsStreamEnv),
 		Subject:    os.Getenv(natsSubjectEnv),
 		Consumer:   os.Getenv(natsConsumerEnv),

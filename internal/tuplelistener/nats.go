@@ -37,6 +37,7 @@ const (
 
 type NATSConfig struct {
 	URL        string
+	Token      string
 	Stream     string
 	Subject    string
 	Consumer   string
@@ -69,7 +70,7 @@ func RunNATS(ctx context.Context, config NATSConfig, applier Applier) error {
 		return fmt.Errorf("NATS URL is required")
 	}
 
-	nc, err := nats.Connect(config.URL, nats.Name(DefaultConsumer))
+	nc, err := nats.Connect(config.URL, natsOptions(config)...)
 	if err != nil {
 		return err
 	}
@@ -124,6 +125,14 @@ func RunNATS(ctx context.Context, config NATSConfig, applier Applier) error {
 			log.FromContext(ctx).Error(err, "Failed to process tuple message")
 		}
 	}
+}
+
+func natsOptions(config NATSConfig) []nats.Option {
+	options := []nats.Option{nats.Name(config.Consumer)}
+	if config.Token != "" {
+		options = append(options, nats.Token(config.Token))
+	}
+	return options
 }
 
 type NATSMessage struct {

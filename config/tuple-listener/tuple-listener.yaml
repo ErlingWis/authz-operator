@@ -28,7 +28,16 @@ spec:
         - /tuple-listener
         env:
         - name: OPENFGA_API_URL
-          value: http://bridder-openfga:8080
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: OPENFGA_API_URL
+        - name: OPENFGA_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: OPENFGA_API_TOKEN
+              optional: true
         - name: TUPLE_LISTENER_NAMESPACE
           valueFrom:
             fieldRef:
@@ -36,17 +45,46 @@ spec:
         - name: TUPLE_LISTENER_RELEASE_NAME
           value: bridder-authorization-model
         - name: NATS_URL
-          value: nats://bridder-nats:4222
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: NATS_URL
+        - name: NATS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: NATS_TOKEN
+              optional: true
         - name: NATS_STREAM
-          value: bridder-tuples
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: NATS_STREAM
+              optional: true
         - name: NATS_SUBJECT
-          value: bridder.tuples.ops
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: NATS_SUBJECT
+              optional: true
         - name: NATS_CONSUMER
-          value: bridder-tuple-listener
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: NATS_CONSUMER
+              optional: true
         - name: NATS_DLQ_SUBJECT
-          value: bridder.tuples.ops.dlq
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: NATS_DLQ_SUBJECT
+              optional: true
         - name: TUPLE_LISTENER_BATCH_SIZE
-          value: "50"
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: TUPLE_LISTENER_BATCH_SIZE
+              optional: true
         image: controller:latest
         imagePullPolicy: IfNotPresent
         name: tuple-listener

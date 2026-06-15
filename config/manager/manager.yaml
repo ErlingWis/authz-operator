@@ -65,9 +65,28 @@ spec:
           - --health-probe-bind-address=:8081
         env:
         - name: OPENFGA_API_URL
-          value: http://bridder-openfga:8080
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: OPENFGA_API_URL
+        - name: OPENFGA_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: OPENFGA_API_TOKEN
+              optional: true
+        - name: OPENFGA_STORE_ID
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: OPENFGA_STORE_ID
+              optional: true
         - name: OPENFGA_STORE_NAME
-          value: bridder
+          valueFrom:
+            secretKeyRef:
+              name: bridder-config
+              key: OPENFGA_STORE_NAME
+              optional: true
         image: controller:latest
         imagePullPolicy: IfNotPresent
         name: manager

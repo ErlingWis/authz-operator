@@ -16,15 +16,6 @@ rules:
   - update
   - watch
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - patch
-  - watch
-- apiGroups:
   - auth.bridder.io
   resources:
   - authorizationmodelreleases

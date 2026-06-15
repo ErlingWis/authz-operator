@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	openfgaclient "github.com/openfga/go-sdk/client"
+	"github.com/openfga/go-sdk/credentials"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -92,7 +93,8 @@ func (r *StableReleaseResolver) ResolveStableModel(ctx context.Context) (StableM
 }
 
 type OpenFGAWriter struct {
-	APIURL string
+	APIURL   string
+	APIToken string
 }
 
 func (w *OpenFGAWriter) WriteTuples(ctx context.Context, stableModel StableModel, changes tuple.Changes) error {
@@ -103,10 +105,7 @@ func (w *OpenFGAWriter) WriteTuples(ctx context.Context, stableModel StableModel
 		return nil
 	}
 
-	sdkClient, err := openfgaclient.NewSdkClient(&openfgaclient.ClientConfiguration{
-		ApiUrl:  w.APIURL,
-		StoreId: stableModel.StoreID,
-	})
+	sdkClient, err := openfgaclient.NewSdkClient(w.clientConfiguration(stableModel.StoreID))
 	if err != nil {
 		return err
 	}
@@ -142,4 +141,18 @@ func (w *OpenFGAWriter) WriteTuples(ctx context.Context, stableModel StableModel
 		Body(request).
 		Execute()
 	return err
+}
+
+func (w *OpenFGAWriter) clientConfiguration(storeID string) *openfgaclient.ClientConfiguration {
+	config := &openfgaclient.ClientConfiguration{
+		ApiUrl:  w.APIURL,
+		StoreId: storeID,
+	}
+	if w.APIToken != "" {
+		config.Credentials = &credentials.Credentials{
+			Method: credentials.CredentialsMethodApiToken,
+			Config: &credentials.Config{ApiToken: w.APIToken},
+		}
+	}
+	return config
 }

@@ -12,6 +12,30 @@
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
 
+### External dependencies
+
+Bridder does not deploy OpenFGA or NATS in the default release install. Create
+those services separately, then provide their connection settings in the
+`bridder-system/bridder-config` Secret before deploying Bridder:
+
+```sh
+kubectl create namespace bridder-system
+kubectl -n bridder-system create secret generic bridder-config \
+  --from-literal=OPENFGA_API_URL=https://openfga.example.com \
+  --from-literal=OPENFGA_STORE_NAME=bridder \
+  --from-literal=NATS_URL=nats://nats.example.com:4222
+```
+
+Optional keys are `OPENFGA_STORE_ID`, `OPENFGA_API_TOKEN`, `NATS_TOKEN`,
+`NATS_STREAM`, `NATS_SUBJECT`, `NATS_CONSUMER`, `NATS_DLQ_SUBJECT`, and
+`TUPLE_LISTENER_BATCH_SIZE`.
+
+For local development, deploy the bundled dependency stack instead:
+
+```sh
+kubectl apply -k config/dev
+```
+
 ### To Deploy on the cluster
 **Build and push your image to the location specified by `IMG`:**
 
@@ -39,13 +63,39 @@ make deploy IMG=<some-registry>/bridder:tag
 privileges or be logged in as admin.
 
 **Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+You can apply the `AuthorizationModule` samples from `config/samples`:
 
 ```sh
 kubectl apply -k config/samples/
 ```
 
 >**NOTE**: Ensure that the samples has default values to test it out.
+
+The controller creates the managed `AuthorizationModelRelease` in the
+`bridder-system` namespace. Promote a published candidate by patching that
+release with the candidate hash:
+
+```sh
+kubectl -n bridder-system patch authorizationmodelrelease bridder-authorization-model \
+  --type merge \
+  -p '{"spec":{"stableModelHash":"<candidate-model-hash>"}}'
+```
+
+The `bridder-authorization-model-proxy` Service exposes the stable authorization
+model on port `8080`. It serves the AuthZEN discovery and access endpoints, and
+forwards AuthZEN access requests to the configured OpenFGA API using the
+promoted stable store and model IDs.
+
+Bridder-specific metadata endpoints are also available:
+
+```sh
+GET /bridder/v1/resource-types
+GET /bridder/v1/resource-types/<resource-type>/access-schema
+GET /bridder/v1/role-assignments?resourceType=<resource-type>&resourceId=<resource-id>
+```
+
+The role assignment endpoint reports direct role tuples on the requested
+resource. It does not expand inherited or computed permissions.
 
 ### To Uninstall
 **Delete the instances (CRs) from the cluster:**
@@ -132,4 +182,3 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
-

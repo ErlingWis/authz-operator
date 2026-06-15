@@ -112,6 +112,7 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 build: manifests generate fmt vet ## Build binaries.
 	go build -o bin/manager cmd/main.go
 	go build -o bin/tuple-listener cmd/tuple-listener/main.go
+	go build -o bin/authz-proxy cmd/authz-proxy/main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.

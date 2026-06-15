@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openfga/go-sdk/credentials"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -114,6 +115,31 @@ func TestServiceReturnsResolverError(t *testing.T) {
 
 	if err := service.Apply(ctx, tuple.Changes{}); !errors.Is(err, wantErr) {
 		t.Fatalf("Apply() error = %v, want %v", err, wantErr)
+	}
+}
+
+func TestOpenFGAWriterConfiguresAPITokenCredentials(t *testing.T) {
+	writer := &OpenFGAWriter{
+		APIURL:   "https://openfga.example.test",
+		APIToken: "token-1",
+	}
+
+	config := writer.clientConfiguration("store-1")
+
+	if config.ApiUrl != "https://openfga.example.test" {
+		t.Fatalf("ApiUrl = %q, want %q", config.ApiUrl, "https://openfga.example.test")
+	}
+	if config.StoreId != "store-1" {
+		t.Fatalf("StoreId = %q, want %q", config.StoreId, "store-1")
+	}
+	if config.Credentials == nil {
+		t.Fatal("Credentials = nil, want API token credentials")
+	}
+	if config.Credentials.Method != credentials.CredentialsMethodApiToken {
+		t.Fatalf("Credentials.Method = %q, want %q", config.Credentials.Method, credentials.CredentialsMethodApiToken)
+	}
+	if config.Credentials.Config.ApiToken != "token-1" {
+		t.Fatalf("ApiToken = %q, want %q", config.Credentials.Config.ApiToken, "token-1")
 	}
 }
 

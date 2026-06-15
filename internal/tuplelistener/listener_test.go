@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/nats-io/nats.go"
 
 	"my.domain/fga/internal/tuple"
 )
@@ -133,6 +134,26 @@ func TestEncodeDeadLetterPreservesMalformedJSONPayload(t *testing.T) {
 	}
 	if diff := cmp.Diff(payload, message.Payload); diff != "" {
 		t.Fatalf("payload mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestNATSOptionsConfigureTokenAndConsumerName(t *testing.T) {
+	config := NATSConfig{
+		Consumer: "consumer-1",
+		Token:    "token-1",
+	}
+	options := nats.GetDefaultOptions()
+	for _, option := range natsOptions(config) {
+		if err := option(&options); err != nil {
+			t.Fatalf("option() error = %v", err)
+		}
+	}
+
+	if options.Name != "consumer-1" {
+		t.Fatalf("Name = %q, want %q", options.Name, "consumer-1")
+	}
+	if options.Token != "token-1" {
+		t.Fatalf("Token = %q, want %q", options.Token, "token-1")
 	}
 }
 

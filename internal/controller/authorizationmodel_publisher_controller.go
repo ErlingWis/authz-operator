@@ -24,6 +24,7 @@ import (
 
 	openfga "github.com/openfga/go-sdk"
 	openfgaclient "github.com/openfga/go-sdk/client"
+	"github.com/openfga/go-sdk/credentials"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,6 +41,7 @@ import (
 
 const (
 	openFGAAPIURLEnv    = "OPENFGA_API_URL"
+	openFGAAPITokenEnv  = "OPENFGA_API_TOKEN"
 	openFGAStoreIDEnv   = "OPENFGA_STORE_ID"
 	openFGAStoreNameEnv = "OPENFGA_STORE_NAME"
 
@@ -79,12 +81,16 @@ func NewOpenFGAAuthorizationModelPublisherFromEnv() (AuthorizationModelPublisher
 	if apiURL == "" {
 		return nil, fmt.Errorf("%s is required", openFGAAPIURLEnv)
 	}
-	return &OpenFGAAuthorizationModelPublisher{APIURL: apiURL}, nil
+	return &OpenFGAAuthorizationModelPublisher{
+		APIURL:   apiURL,
+		APIToken: os.Getenv(openFGAAPITokenEnv),
+	}, nil
 }
 
 // OpenFGAAuthorizationModelPublisher writes models using the OpenFGA SDK.
 type OpenFGAAuthorizationModelPublisher struct {
-	APIURL string
+	APIURL   string
+	APIToken string
 }
 
 func (p *OpenFGAAuthorizationModelPublisher) PublishCandidate(ctx context.Context, storeID, storeName string, request openfga.WriteAuthorizationModelRequest) (PublishedAuthorizationModel, error) {
@@ -92,10 +98,7 @@ func (p *OpenFGAAuthorizationModelPublisher) PublishCandidate(ctx context.Contex
 		storeName = defaultOpenFGAStoreName
 	}
 
-	sdkClient, err := openfgaclient.NewSdkClient(&openfgaclient.ClientConfiguration{
-		ApiUrl:  p.APIURL,
-		StoreId: storeID,
-	})
+	sdkClient, err := openfgaclient.NewSdkClient(p.clientConfiguration(storeID))
 	if err != nil {
 		return PublishedAuthorizationModel{}, err
 	}
@@ -122,6 +125,20 @@ func (p *OpenFGAAuthorizationModelPublisher) PublishCandidate(ctx context.Contex
 		StoreID: storeID,
 		ModelID: response.GetAuthorizationModelId(),
 	}, nil
+}
+
+func (p *OpenFGAAuthorizationModelPublisher) clientConfiguration(storeID string) *openfgaclient.ClientConfiguration {
+	config := &openfgaclient.ClientConfiguration{
+		ApiUrl:  p.APIURL,
+		StoreId: storeID,
+	}
+	if p.APIToken != "" {
+		config.Credentials = &credentials.Credentials{
+			Method: credentials.CredentialsMethodApiToken,
+			Config: &credentials.Config{ApiToken: p.APIToken},
+		}
+	}
+	return config
 }
 
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;patch;update
