@@ -123,14 +123,19 @@ var _ = Describe("AuthorizationModule Controller", func() {
 			},
 			Spec: authv1.AuthorizationModuleSpec{
 				Resource: "payment",
-				Topology: &authv1.AuthorizationTopology{
-					Parent: &authv1.ParentResource{Resource: "project"},
+				Topology: map[string]authv1.TopologyRelation{
+					"parent": {Resources: []string{"project"}},
 				},
 				Roles: map[string]authv1.AuthorizationRole{
 					"payer": {
 						Subjects: []authv1.AuthorizationSubject{
 							{Type: "user"},
 							{Type: "project", Relation: "owner"},
+						},
+					},
+					"viewer": {
+						Inherited: []authv1.InheritedRelation{
+							{Via: "parent", Relation: "editor"},
 						},
 					},
 				},
@@ -172,11 +177,18 @@ var _ = Describe("AuthorizationModule Controller", func() {
 
 		paymentMetadata := metadataRelationsForType(typeDefinitions, "payment")
 		Expect(paymentMetadata).To(HaveKey("payer"))
+		Expect(paymentMetadata).To(HaveKey("parent"))
 		payerTypes := paymentMetadata["payer"].(map[string]any)["directly_related_user_types"].([]any)
 		Expect(payerTypes).To(ContainElement(SatisfyAll(
 			HaveKeyWithValue("type", "project"),
 			HaveKeyWithValue("relation", "owner"),
 		)))
+		paymentRelations := relationsForType(typeDefinitions, "payment")
+		viewerRelation := paymentRelations["viewer"].(map[string]any)
+		Expect(viewerRelation["tupleToUserset"]).To(SatisfyAll(
+			HaveKey("tupleset"),
+			HaveKey("computedUserset"),
+		))
 
 		var reconciledProject authv1.AuthorizationModule
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "project-authorization", Namespace: "projects"}, &reconciledProject)).To(Succeed())

@@ -18,12 +18,27 @@ metadata:
   labels:
     app.kubernetes.io/name: bridder
     app.kubernetes.io/managed-by: kustomize
+  name: organization-authorization
+spec:
+  resource: organization
+  roles:
+    owner:
+      subjects:
+        - type: user
+---
+apiVersion: auth.bridder.io/v1
+kind: AuthorizationModule
+metadata:
+  labels:
+    app.kubernetes.io/name: bridder
+    app.kubernetes.io/managed-by: kustomize
   name: project-authorization
 spec:
   resource: project
   topology:
     parent:
-      resource: organization
+      resources:
+        - organization
   roles:
     owner:
       subjects:
@@ -33,11 +48,16 @@ spec:
         - type: user
         - type: group
           relation: member
+    viewer:
+      inherited:
+        - via: parent
+          relation: owner
   permissions:
     view:
       anyOf:
         - owner
         - editor
+        - viewer
     delete:
       anyOf:
         - owner

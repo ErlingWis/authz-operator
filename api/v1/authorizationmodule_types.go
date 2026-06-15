@@ -28,9 +28,9 @@ type AuthorizationModuleSpec struct {
 	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9_]*$`
 	Resource string `json:"resource"`
 
-	// topology defines parent-like relationships to other resource types.
+	// topology defines object relationships to other resource types.
 	// +optional
-	Topology *AuthorizationTopology `json:"topology,omitempty"`
+	Topology map[string]TopologyRelation `json:"topology,omitempty"`
 
 	// roles define directly assignable relationships on this resource.
 	// +kubebuilder:validation:Required
@@ -42,28 +42,42 @@ type AuthorizationModuleSpec struct {
 	Permissions map[string]AuthorizationPermission `json:"permissions,omitempty"`
 }
 
-// AuthorizationTopology defines relationships between this resource and parent resources.
-type AuthorizationTopology struct {
-	// parent defines the parent relation for this resource.
-	// +optional
-	Parent *ParentResource `json:"parent,omitempty"`
-}
-
-// ParentResource defines a parent object type relation.
-type ParentResource struct {
-	// resource is the parent OpenFGA object type.
+// TopologyRelation defines an object relation to other resource types.
+type TopologyRelation struct {
+	// resources are the OpenFGA object types this relation can point to.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9_]*$`
-	Resource string `json:"resource"`
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:items:MinLength=1
+	// +kubebuilder:validation:items:Pattern=`^[a-z][a-z0-9_]*$`
+	Resources []string `json:"resources"`
 }
 
 // AuthorizationRole defines a directly assignable relationship.
 type AuthorizationRole struct {
 	// subjects are the object types or usersets that can be directly assigned this role.
-	// +kubebuilder:validation:Required
+	// +optional
 	// +kubebuilder:validation:MinItems=1
-	Subjects []AuthorizationSubject `json:"subjects"`
+	Subjects []AuthorizationSubject `json:"subjects,omitempty"`
+
+	// inherited grants this role through another object relation.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	Inherited []InheritedRelation `json:"inherited,omitempty"`
+}
+
+// InheritedRelation defines a relation reached through a topology relation.
+type InheritedRelation struct {
+	// via is the topology relation to follow on this resource.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9_]*$`
+	Via string `json:"via"`
+
+	// relation is the relation to compute on the related resource.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9_]*$`
+	Relation string `json:"relation"`
 }
 
 // AuthorizationSubject defines a type restriction for a directly assignable role.

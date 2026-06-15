@@ -66,6 +66,31 @@ spec:
                 additionalProperties:
                   description: AuthorizationRole defines a directly assignable relationship.
                   properties:
+                    inherited:
+                      description: inherited grants this role through another object
+                        relation.
+                      items:
+                        description: InheritedRelation defines a relation reached
+                          through a topology relation.
+                        properties:
+                          relation:
+                            description: relation is the relation to compute on the
+                              related resource.
+                            minLength: 1
+                            pattern: ^[a-z][a-z0-9_]*$
+                            type: string
+                          via:
+                            description: via is the topology relation to follow on
+                              this resource.
+                            minLength: 1
+                            pattern: ^[a-z][a-z0-9_]*$
+                            type: string
+                        required:
+                        - relation
+                        - via
+                        type: object
+                      minItems: 1
+                      type: array
                     subjects:
                       description: subjects are the object types or usersets that
                         can be directly assigned this role.
@@ -90,28 +115,30 @@ spec:
                         type: object
                       minItems: 1
                       type: array
-                  required:
-                  - subjects
                   type: object
                 description: roles define directly assignable relationships on this
                   resource.
                 minProperties: 1
                 type: object
               topology:
-                description: topology defines parent-like relationships to other resource
-                  types.
-                properties:
-                  parent:
-                    description: parent defines the parent relation for this resource.
-                    properties:
-                      resource:
-                        description: resource is the parent OpenFGA object type.
+                additionalProperties:
+                  description: TopologyRelation defines an object relation to other
+                    resource types.
+                  properties:
+                    resources:
+                      description: resources are the OpenFGA object types this relation
+                        can point to.
+                      items:
                         minLength: 1
                         pattern: ^[a-z][a-z0-9_]*$
                         type: string
-                    required:
-                    - resource
-                    type: object
+                      minItems: 1
+                      type: array
+                  required:
+                  - resources
+                  type: object
+                description: topology defines object relationships to other resource
+                  types.
                 type: object
             required:
             - resource

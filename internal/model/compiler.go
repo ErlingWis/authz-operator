@@ -93,6 +93,7 @@ func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 	model := AuthorizationModel{SchemaVersion: schemaVersion}
 	types := map[string]*TypeDefinition{}
 	moduleByResource := map[string]string{}
+	relationNamesByResource := map[string]map[string]struct{}{}
 
 	ensureType := func(name string) *TypeDefinition {
 		if typeDef, ok := types[name]; ok {
@@ -113,6 +114,7 @@ func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 		}
 		moduleByResource[resource] = fmt.Sprintf("%s/%s", module.Namespace, module.Name)
 		ensureType(resource)
+		ensureRelationSet(relationNamesByResource, resource)
 
 		for _, role := range module.Spec.Roles {
 			for _, subject := range role.Subjects {
@@ -121,15 +123,52 @@ func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 				}
 			}
 		}
-		if module.Spec.Topology != nil && module.Spec.Topology.Parent != nil {
-			ensureType(module.Spec.Topology.Parent.Resource)
+		for _, topology := range module.Spec.Topology {
+			for _, resource := range topology.Resources {
+				ensureType(resource)
+			}
+		}
+	}
+
+	for _, module := range modules {
+		resource := module.Spec.Resource
+		relationNames := ensureRelationSet(relationNamesByResource, resource)
+
+		topologyNames := sortedKeys(module.Spec.Topology)
+		for _, topologyName := range topologyNames {
+			if err := validateRelationName(module, "topology relation", topologyName); err != nil {
+				return AuthorizationModel{}, err
+			}
+			relationNames[topologyName] = struct{}{}
+		}
+
+		roleNames := sortedKeys(module.Spec.Roles)
+		for _, roleName := range roleNames {
+			if err := validateRelationName(module, "role", roleName); err != nil {
+				return AuthorizationModel{}, err
+			}
+			if _, exists := relationNames[roleName]; exists {
+				return AuthorizationModel{}, fmt.Errorf("%s/%s: role %q conflicts with an existing relation", module.Namespace, module.Name, roleName)
+			}
+			relationNames[roleName] = struct{}{}
+		}
+
+		permissionNames := sortedKeys(module.Spec.Permissions)
+		for _, permissionName := range permissionNames {
+			if err := validateRelationName(module, "permission", permissionName); err != nil {
+				return AuthorizationModel{}, err
+			}
+			if _, exists := relationNames[permissionName]; exists {
+				return AuthorizationModel{}, fmt.Errorf("%s/%s: permission %q conflicts with an existing relation", module.Namespace, module.Name, permissionName)
+			}
+			relationNames[permissionName] = struct{}{}
 		}
 	}
 
 	for i := range modules {
 		module := modules[i]
 		typeDef := ensureType(module.Spec.Resource)
-		if err := compileModule(module, typeDef); err != nil {
+		if err := compileModule(module, typeDef, relationNamesByResource); err != nil {
 			return AuthorizationModel{}, err
 		}
 	}
@@ -190,42 +229,40 @@ func Hash(model AuthorizationModel) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition) error {
+func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition, relationNamesByResource map[string]map[string]struct{}) error {
 	relations := map[string]Userset{}
 	metadata := map[string]RelationMetadata{}
 
-	if module.Spec.Topology != nil && module.Spec.Topology.Parent != nil {
-		parent := module.Spec.Topology.Parent.Resource
-		if parent == "" {
-			return fmt.Errorf("%s/%s: spec.topology.parent.resource is required", module.Namespace, module.Name)
+	topologyNames := sortedKeys(module.Spec.Topology)
+	for _, topologyName := range topologyNames {
+		topology := module.Spec.Topology[topologyName]
+		if len(topology.Resources) == 0 {
+			return fmt.Errorf("%s/%s: topology relation %q must reference at least one resource", module.Namespace, module.Name, topologyName)
 		}
-		relations["parent"] = Userset{This: &ThisUserset{}}
-		metadata["parent"] = RelationMetadata{
-			DirectlyRelatedUserTypes: []RelationReference{{Type: parent}},
+		relations[topologyName] = Userset{This: &ThisUserset{}}
+		metadata[topologyName] = RelationMetadata{
+			DirectlyRelatedUserTypes: topologyRelationReferences(topology.Resources),
 		}
 	}
 
 	roleNames := sortedKeys(module.Spec.Roles)
 	for _, roleName := range roleNames {
 		role := module.Spec.Roles[roleName]
-		if err := validateRelationName(module, "role", roleName); err != nil {
+		userset, err := compileRole(module, roleName, role, relationNamesByResource)
+		if err != nil {
 			return err
 		}
-		relations[roleName] = Userset{This: &ThisUserset{}}
-		metadata[roleName] = RelationMetadata{
-			DirectlyRelatedUserTypes: relationReferences(role.Subjects),
+		relations[roleName] = userset
+		if len(role.Subjects) > 0 {
+			metadata[roleName] = RelationMetadata{
+				DirectlyRelatedUserTypes: relationReferences(role.Subjects),
+			}
 		}
 	}
 
 	permissionNames := sortedKeys(module.Spec.Permissions)
 	for _, permissionName := range permissionNames {
 		permission := module.Spec.Permissions[permissionName]
-		if err := validateRelationName(module, "permission", permissionName); err != nil {
-			return err
-		}
-		if _, exists := relations[permissionName]; exists {
-			return fmt.Errorf("%s/%s: permission %q conflicts with an existing relation", module.Namespace, module.Name, permissionName)
-		}
 		userset, err := compilePermission(module, permissionName, permission, relations)
 		if err != nil {
 			return err
@@ -238,6 +275,47 @@ func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition) e
 		typeDef.Metadata = &TypeMetadata{Relations: metadata}
 	}
 	return nil
+}
+
+func compileRole(module authv1.AuthorizationModule, name string, role authv1.AuthorizationRole, relationNamesByResource map[string]map[string]struct{}) (Userset, error) {
+	if len(role.Subjects) == 0 && len(role.Inherited) == 0 {
+		return Userset{}, fmt.Errorf("%s/%s: role %q must define subjects or inherited relations", module.Namespace, module.Name, name)
+	}
+
+	children := make([]Userset, 0, 1+len(role.Inherited))
+	if len(role.Subjects) > 0 {
+		children = append(children, Userset{This: &ThisUserset{}})
+	}
+
+	for _, inherited := range role.Inherited {
+		if err := validateRelationName(module, "inherited via", inherited.Via); err != nil {
+			return Userset{}, err
+		}
+		if err := validateRelationName(module, "inherited relation", inherited.Relation); err != nil {
+			return Userset{}, err
+		}
+		topology, ok := module.Spec.Topology[inherited.Via]
+		if !ok {
+			return Userset{}, fmt.Errorf("%s/%s: role %q inherits through unknown topology relation %q", module.Namespace, module.Name, name, inherited.Via)
+		}
+		for _, resource := range topology.Resources {
+			targetRelations := relationNamesByResource[resource]
+			if _, ok := targetRelations[inherited.Relation]; !ok {
+				return Userset{}, fmt.Errorf("%s/%s: role %q inherits relation %q through %q, but resource %q does not define that relation", module.Namespace, module.Name, name, inherited.Relation, inherited.Via, resource)
+			}
+		}
+		children = append(children, Userset{
+			TupleToUserset: &TupleToUserset{
+				Tupleset:        ObjectRelation{Object: "", Relation: inherited.Via},
+				ComputedUserset: ObjectRelation{Object: "", Relation: inherited.Relation},
+			},
+		})
+	}
+
+	if len(children) == 1 {
+		return children[0], nil
+	}
+	return Userset{Union: &UsersetUnion{Child: children}}, nil
 }
 
 func compilePermission(module authv1.AuthorizationModule, name string, permission authv1.AuthorizationPermission, relations map[string]Userset) (Userset, error) {
@@ -259,6 +337,17 @@ func compilePermission(module authv1.AuthorizationModule, name string, permissio
 		return children[0], nil
 	}
 	return Userset{Union: &UsersetUnion{Child: children}}, nil
+}
+
+func topologyRelationReferences(resources []string) []RelationReference {
+	references := make([]RelationReference, 0, len(resources))
+	for _, resource := range resources {
+		references = append(references, RelationReference{Type: resource})
+	}
+	sort.Slice(references, func(i, j int) bool {
+		return references[i].Type < references[j].Type
+	})
+	return references
 }
 
 func relationReferences(subjects []authv1.AuthorizationSubject) []RelationReference {
@@ -291,4 +380,13 @@ func sortedKeys[T any](values map[string]T) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func ensureRelationSet(values map[string]map[string]struct{}, key string) map[string]struct{} {
+	if relations, ok := values[key]; ok {
+		return relations
+	}
+	relations := map[string]struct{}{}
+	values[key] = relations
+	return relations
 }

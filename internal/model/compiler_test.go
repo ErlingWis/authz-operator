@@ -18,6 +18,7 @@ package model
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -31,8 +32,8 @@ func TestCompile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "project-auth", Namespace: "platform"},
 		Spec: authv1.AuthorizationModuleSpec{
 			Resource: "project",
-			Topology: &authv1.AuthorizationTopology{
-				Parent: &authv1.ParentResource{Resource: "organization"},
+			Topology: map[string]authv1.TopologyRelation{
+				"parent": {Resources: []string{"organization"}},
 			},
 			Roles: map[string]authv1.AuthorizationRole{
 				"owner": {
@@ -134,6 +135,174 @@ func TestCompileRejectsUnknownPermissionReference(t *testing.T) {
 	}
 }
 
+func TestCompileInheritedRole(t *testing.T) {
+	folder := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "folder-auth", Namespace: "platform"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "folder",
+			Roles: map[string]authv1.AuthorizationRole{
+				"reader": {
+					Subjects: []authv1.AuthorizationSubject{{Type: "user"}},
+				},
+			},
+		},
+	}
+	file := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "file-auth", Namespace: "platform"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "file",
+			Topology: map[string]authv1.TopologyRelation{
+				"parent": {Resources: []string{"folder"}},
+			},
+			Roles: map[string]authv1.AuthorizationRole{
+				"reader": {
+					Inherited: []authv1.InheritedRelation{{Via: "parent", Relation: "reader"}},
+				},
+			},
+			Permissions: map[string]authv1.AuthorizationPermission{
+				"read": {AnyOf: []string{"reader"}},
+			},
+		},
+	}
+
+	got, err := Compile([]authv1.AuthorizationModule{folder, file})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+
+	fileRelations := typeDefinition(t, got, "file").Relations
+	wantReader := Userset{
+		TupleToUserset: &TupleToUserset{
+			Tupleset:        ObjectRelation{Object: "", Relation: "parent"},
+			ComputedUserset: ObjectRelation{Object: "", Relation: "reader"},
+		},
+	}
+	if diff := cmp.Diff(wantReader, fileRelations["reader"]); diff != "" {
+		t.Fatalf("reader relation mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCompileMixedDirectAndInheritedRole(t *testing.T) {
+	folder := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "folder-auth", Namespace: "platform"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "folder",
+			Roles: map[string]authv1.AuthorizationRole{
+				"reader": {Subjects: []authv1.AuthorizationSubject{{Type: "user"}}},
+			},
+		},
+	}
+	file := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "file-auth", Namespace: "platform"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "file",
+			Topology: map[string]authv1.TopologyRelation{
+				"parent": {Resources: []string{"folder"}},
+			},
+			Roles: map[string]authv1.AuthorizationRole{
+				"reader": {
+					Subjects:  []authv1.AuthorizationSubject{{Type: "user"}},
+					Inherited: []authv1.InheritedRelation{{Via: "parent", Relation: "reader"}},
+				},
+			},
+		},
+	}
+
+	got, err := Compile([]authv1.AuthorizationModule{folder, file})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+
+	reader := typeDefinition(t, got, "file").Relations["reader"]
+	want := Userset{Union: &UsersetUnion{Child: []Userset{
+		{This: &ThisUserset{}},
+		{TupleToUserset: &TupleToUserset{
+			Tupleset:        ObjectRelation{Object: "", Relation: "parent"},
+			ComputedUserset: ObjectRelation{Object: "", Relation: "reader"},
+		}},
+	}}}
+	if diff := cmp.Diff(want, reader); diff != "" {
+		t.Fatalf("reader relation mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCompileRejectsUnknownInheritedVia(t *testing.T) {
+	authModule := module("project-auth")
+	authModule.Spec.Roles["owner"] = authv1.AuthorizationRole{
+		Inherited: []authv1.InheritedRelation{{Via: "parent", Relation: "owner"}},
+	}
+
+	_, err := Compile([]authv1.AuthorizationModule{authModule})
+	if err == nil || !strings.Contains(err.Error(), "unknown topology relation") {
+		t.Fatalf("Compile() error = %v, want unknown topology relation", err)
+	}
+}
+
+func TestCompileRejectsUnknownInheritedTargetRelation(t *testing.T) {
+	folder := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "folder-auth", Namespace: "platform"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "folder",
+			Roles: map[string]authv1.AuthorizationRole{
+				"reader": {Subjects: []authv1.AuthorizationSubject{{Type: "user"}}},
+			},
+		},
+	}
+	file := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "file-auth", Namespace: "platform"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "file",
+			Topology: map[string]authv1.TopologyRelation{
+				"parent": {Resources: []string{"folder"}},
+			},
+			Roles: map[string]authv1.AuthorizationRole{
+				"reader": {
+					Inherited: []authv1.InheritedRelation{{Via: "parent", Relation: "missing"}},
+				},
+			},
+		},
+	}
+
+	_, err := Compile([]authv1.AuthorizationModule{folder, file})
+	if err == nil || !strings.Contains(err.Error(), "does not define that relation") {
+		t.Fatalf("Compile() error = %v, want missing target relation", err)
+	}
+}
+
+func TestCompileRejectsEmptyTopologyResources(t *testing.T) {
+	authModule := module("project-auth")
+	authModule.Spec.Topology = map[string]authv1.TopologyRelation{
+		"parent": {},
+	}
+
+	_, err := Compile([]authv1.AuthorizationModule{authModule})
+	if err == nil || !strings.Contains(err.Error(), "must reference at least one resource") {
+		t.Fatalf("Compile() error = %v, want empty topology resources", err)
+	}
+}
+
+func TestCompileRejectsEmptyRole(t *testing.T) {
+	authModule := module("project-auth")
+	authModule.Spec.Roles["empty"] = authv1.AuthorizationRole{}
+
+	_, err := Compile([]authv1.AuthorizationModule{authModule})
+	if err == nil || !strings.Contains(err.Error(), "must define subjects or inherited relations") {
+		t.Fatalf("Compile() error = %v, want empty role", err)
+	}
+}
+
+func TestCompileRejectsRoleTopologyConflict(t *testing.T) {
+	authModule := module("project-auth")
+	authModule.Spec.Topology = map[string]authv1.TopologyRelation{
+		"owner": {Resources: []string{"organization"}},
+	}
+
+	_, err := Compile([]authv1.AuthorizationModule{authModule})
+	if err == nil || !strings.Contains(err.Error(), "conflicts with an existing relation") {
+		t.Fatalf("Compile() error = %v, want role topology conflict", err)
+	}
+}
+
 func TestHashIsStable(t *testing.T) {
 	first := module("project-auth")
 	first.Spec.Roles["editor"] = authv1.AuthorizationRole{
@@ -214,4 +383,15 @@ func module(name string) authv1.AuthorizationModule {
 			},
 		},
 	}
+}
+
+func typeDefinition(t *testing.T, model AuthorizationModel, name string) TypeDefinition {
+	t.Helper()
+	for _, typeDef := range model.TypeDefinition {
+		if typeDef.Type == name {
+			return typeDef
+		}
+	}
+	t.Fatalf("type definition %q not found", name)
+	return TypeDefinition{}
 }
