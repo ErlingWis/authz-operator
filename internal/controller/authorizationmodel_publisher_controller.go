@@ -26,6 +26,7 @@ import (
 	openfgaclient "github.com/openfga/go-sdk/client"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -33,6 +34,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
+	authv1 "my.domain/fga/api/v1"
 	"my.domain/fga/internal/model"
 )
 
@@ -42,6 +44,8 @@ const (
 	openFGAStoreNameEnv = "OPENFGA_STORE_NAME"
 
 	defaultOpenFGAStoreName = "bridder"
+
+	authorizationModelReleaseName = "bridder-authorization-model"
 
 	annotationCandidateModelHash      = "auth.bridder.io/candidate-model-hash"
 	annotationCandidateOpenFGAModelID = "auth.bridder.io/candidate-openfga-model-id"
@@ -121,6 +125,8 @@ func (p *OpenFGAAuthorizationModelPublisher) PublishCandidate(ctx context.Contex
 }
 
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;patch;update
+// +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationmodelreleases,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationmodelreleases/status,verbs=get;update;patch
 
 func (r *AuthorizationModelPublisherReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
@@ -172,6 +178,9 @@ func (r *AuthorizationModelPublisherReconciler) Reconcile(ctx context.Context, r
 		return ctrl.Result{}, nil
 	}
 
+	if err := r.patchCandidateReleaseState(ctx, &configMap, modelHash, published); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.patchCandidate(ctx, &configMap, modelHash, published); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -212,6 +221,56 @@ func (r *AuthorizationModelPublisherReconciler) patchPublishError(ctx context.Co
 	configMap.Annotations[annotationPublishError] = err.Error()
 	configMap.Annotations[annotationPublishErrorAt] = r.now().Format(time.RFC3339)
 	return r.Patch(ctx, configMap, patch)
+}
+
+func (r *AuthorizationModelPublisherReconciler) patchCandidateReleaseState(ctx context.Context, configMap *corev1.ConfigMap, modelHash string, published PublishedAuthorizationModel) error {
+	namespacedName := client.ObjectKey{
+		Namespace: configMap.Namespace,
+		Name:      authorizationModelReleaseName,
+	}
+
+	var release authv1.AuthorizationModelRelease
+	if err := r.Get(ctx, namespacedName, &release); err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+
+		release = authv1.AuthorizationModelRelease{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespacedName.Namespace,
+				Name:      namespacedName.Name,
+				Labels: map[string]string{
+					"app.kubernetes.io/name":       "bridder",
+					"app.kubernetes.io/managed-by": "bridder-controller",
+				},
+			},
+			Spec: authv1.AuthorizationModelReleaseSpec{},
+		}
+		if err := r.Create(ctx, &release); err != nil {
+			return err
+		}
+	}
+
+	if err := r.Get(ctx, namespacedName, &release); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(release.DeepCopy())
+	publishedAt := metav1.NewTime(r.now())
+	release.Status.Candidate = &authv1.AuthorizationModelReleaseState{
+		ModelHash:      modelHash,
+		OpenFGAStoreID: published.StoreID,
+		OpenFGAModelID: published.ModelID,
+		PublishedAt:    publishedAt,
+	}
+	setCondition(&release.Status.Conditions, metav1.Condition{
+		Type:               "CandidatePublished",
+		Status:             metav1.ConditionTrue,
+		Reason:             "OpenFGAModelWritten",
+		Message:            "Candidate authorization model written to OpenFGA",
+		ObservedGeneration: release.Generation,
+	})
+	return r.Status().Patch(ctx, &release, patch)
 }
 
 func (r *AuthorizationModelPublisherReconciler) now() time.Time {

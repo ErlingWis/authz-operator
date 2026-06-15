@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/auth.bridder.io_authorizationmodules.yaml
+- bases/auth.bridder.io_authorizationmodelreleases.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

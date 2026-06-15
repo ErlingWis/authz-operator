@@ -25,9 +25,13 @@ import (
 	. "github.com/onsi/gomega"
 	openfga "github.com/openfga/go-sdk"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	authv1 "my.domain/fga/api/v1"
 )
 
 var _ = Describe("AuthorizationModelPublisher Controller", func() {
@@ -40,6 +44,7 @@ var _ = Describe("AuthorizationModelPublisher Controller", func() {
 
 	AfterEach(func() {
 		deleteConfigMap(ctx, defaultModelNamespace, authorizationModelConfigMapName)
+		deleteAuthorizationModelRelease(ctx, defaultModelNamespace, authorizationModelReleaseName)
 	})
 
 	It("should publish a new candidate model and annotate the ConfigMap", func() {
@@ -62,6 +67,58 @@ var _ = Describe("AuthorizationModelPublisher Controller", func() {
 		Expect(reconciled.Annotations).To(HaveKeyWithValue(annotationCandidateOpenFGAModelID, "model-1"))
 		Expect(reconciled.Annotations).To(HaveKeyWithValue(annotationCandidateOpenFGAStoreID, "store-1"))
 		Expect(reconciled.Annotations).To(HaveKeyWithValue(annotationCandidatePublishedAt, publishedAt.Format(time.RFC3339)))
+
+		var release authv1.AuthorizationModelRelease
+		Expect(k8sClient.Get(ctx, authorizationModelReleaseNamespacedName(), &release)).To(Succeed())
+		Expect(release.Status.Candidate).NotTo(BeNil())
+		Expect(release.Status.Candidate.ModelHash).To(Equal("hash-1"))
+		Expect(release.Status.Candidate.OpenFGAModelID).To(Equal("model-1"))
+		Expect(release.Status.Candidate.OpenFGAStoreID).To(Equal("store-1"))
+		Expect(release.Status.Candidate.PublishedAt.Time).To(BeTemporally("==", publishedAt))
+		Expect(release.Status.Stable).To(BeNil())
+		condition := apimeta.FindStatusCondition(release.Status.Conditions, "CandidatePublished")
+		Expect(condition).NotTo(BeNil())
+		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
+		Expect(condition.Reason).To(Equal("OpenFGAModelWritten"))
+	})
+
+	It("should preserve stable release state when publishing a new candidate", func() {
+		release := &authv1.AuthorizationModelRelease{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      authorizationModelReleaseName,
+				Namespace: defaultModelNamespace,
+			},
+			Spec: authv1.AuthorizationModelReleaseSpec{},
+		}
+		Expect(k8sClient.Create(ctx, release)).To(Succeed())
+		Expect(k8sClient.Get(ctx, authorizationModelReleaseNamespacedName(), release)).To(Succeed())
+		patch := client.MergeFrom(release.DeepCopy())
+		release.Status.Stable = &authv1.AuthorizationModelReleaseState{
+			ModelHash:      "stable-hash",
+			OpenFGAStoreID: "store-1",
+			OpenFGAModelID: "stable-model",
+			PublishedAt:    metav1.NewTime(publishedAt.Add(-time.Hour)),
+		}
+		Expect(k8sClient.Status().Patch(ctx, release, patch)).To(Succeed())
+
+		configMap := authorizationModelConfigMap()
+		Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+		publisher := &fakeAuthorizationModelPublisher{
+			published: PublishedAuthorizationModel{StoreID: "store-1", ModelID: "candidate-model"},
+		}
+		reconciler := publisherReconciler(publisher, publishedAt)
+
+		_, err := reconciler.Reconcile(ctx, reconcile.Request{NamespacedName: authorizationModelConfigMapNamespacedName()})
+		Expect(err).NotTo(HaveOccurred())
+
+		var reconciled authv1.AuthorizationModelRelease
+		Expect(k8sClient.Get(ctx, authorizationModelReleaseNamespacedName(), &reconciled)).To(Succeed())
+		Expect(reconciled.Status.Stable).NotTo(BeNil())
+		Expect(reconciled.Status.Stable.ModelHash).To(Equal("stable-hash"))
+		Expect(reconciled.Status.Candidate).NotTo(BeNil())
+		Expect(reconciled.Status.Candidate.ModelHash).To(Equal("hash-1"))
+		Expect(reconciled.Status.Candidate.OpenFGAModelID).To(Equal("candidate-model"))
 	})
 
 	It("should skip publishing when the current hash is already the candidate", func() {
@@ -157,6 +214,13 @@ func authorizationModelConfigMapNamespacedName() types.NamespacedName {
 	return types.NamespacedName{
 		Namespace: defaultModelNamespace,
 		Name:      authorizationModelConfigMapName,
+	}
+}
+
+func authorizationModelReleaseNamespacedName() types.NamespacedName {
+	return types.NamespacedName{
+		Namespace: defaultModelNamespace,
+		Name:      authorizationModelReleaseName,
 	}
 }
 

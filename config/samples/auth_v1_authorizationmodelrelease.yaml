@@ -1,0 +1,8 @@
+apiVersion: auth.bridder.io/v1
+kind: AuthorizationModelRelease
+metadata:
+  labels:
+    app.kubernetes.io/name: bridder
+    app.kubernetes.io/managed-by: kustomize
+  name: bridder-authorization-model
+spec: {}

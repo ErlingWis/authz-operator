@@ -18,4 +18,12 @@ resources:
   kind: AuthorizationModule
   path: my.domain/fga/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: bridder.io
+  group: auth
+  kind: AuthorizationModelRelease
+  path: my.domain/fga/api/v1
+  version: v1
 version: "3"
