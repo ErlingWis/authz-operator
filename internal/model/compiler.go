@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -134,81 +133,6 @@ func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 	}
 
 	return model, nil
-}
-
-// Fragment returns the compiled OpenFGA type owned by one AuthorizationModule.
-func Fragment(module authv1.AuthorizationModule, authorizationModel AuthorizationModel) (AuthorizationModel, error) {
-	referencedTypes := map[string]struct{}{module.Spec.Resource: {}}
-	for _, role := range module.Spec.Roles {
-		for _, subject := range role.Subjects {
-			if subject.Type != "" {
-				referencedTypes[subject.Type] = struct{}{}
-			}
-		}
-	}
-	for _, topology := range module.Spec.Topology {
-		for _, resource := range topology.Resources {
-			referencedTypes[resource] = struct{}{}
-		}
-	}
-
-	fragment := AuthorizationModel{SchemaVersion: authorizationModel.SchemaVersion}
-	for _, typeDef := range authorizationModel.TypeDefinitions {
-		if _, ok := referencedTypes[typeDef.Type]; !ok {
-			continue
-		}
-		if typeDef.Type != module.Spec.Resource {
-			typeDef = openfga.TypeDefinition{Type: typeDef.Type}
-		}
-		fragment.TypeDefinitions = append(fragment.TypeDefinitions, typeDef)
-	}
-	if len(fragment.TypeDefinitions) > 0 {
-		return fragment, nil
-	}
-	return AuthorizationModel{}, fmt.Errorf("%s/%s: compiled model does not contain resource %q", module.Namespace, module.Name, module.Spec.Resource)
-}
-
-// Merge combines compiled module fragments into one deterministic authorization model.
-func Merge(fragments []AuthorizationModel) (AuthorizationModel, error) {
-	merged := AuthorizationModel{SchemaVersion: schemaVersion}
-	types := map[string]openfga.TypeDefinition{}
-
-	for _, fragment := range fragments {
-		if fragment.SchemaVersion != schemaVersion {
-			return AuthorizationModel{}, fmt.Errorf("schema_version %q is unsupported", fragment.SchemaVersion)
-		}
-		for _, typeDef := range fragment.TypeDefinitions {
-			existing, ok := types[typeDef.Type]
-			if ok {
-				if isStub(existing) || reflect.DeepEqual(existing, typeDef) {
-					types[typeDef.Type] = typeDef
-					continue
-				}
-				if isStub(typeDef) {
-					continue
-				}
-				return AuthorizationModel{}, fmt.Errorf("type %q is defined by multiple authorization module fragments", typeDef.Type)
-			}
-			types[typeDef.Type] = typeDef
-		}
-	}
-
-	typeNames := make([]string, 0, len(types))
-	for name := range types {
-		typeNames = append(typeNames, name)
-	}
-	sort.Strings(typeNames)
-	for _, name := range typeNames {
-		merged.TypeDefinitions = append(merged.TypeDefinitions, types[name])
-	}
-	if len(merged.TypeDefinitions) == 0 {
-		return AuthorizationModel{}, fmt.Errorf("type_definitions is required")
-	}
-	return merged, nil
-}
-
-func isStub(typeDef openfga.TypeDefinition) bool {
-	return typeDef.Relations == nil && typeDef.Metadata == nil
 }
 
 // MarshalStable returns the stable JSON representation used for hashing.

@@ -85,15 +85,6 @@ var _ = Describe("AuthorizationModule Controller", func() {
 		}, &configMap)).To(Succeed())
 		Expect(configMap.Data[authorizationModelHashKey]).To(Equal(reconciled.Status.ObservedModelHash))
 		Expect(json.Valid([]byte(configMap.Data[authorizationModelConfigMapKey]))).To(BeTrue())
-
-		var fragmentConfigMap corev1.ConfigMap
-		Expect(k8sClient.Get(ctx, types.NamespacedName{
-			Name:      authorizationModuleConfigMapName(resource.Name),
-			Namespace: resource.Namespace,
-		}, &fragmentConfigMap)).To(Succeed())
-		Expect(fragmentConfigMap.Labels).To(HaveKeyWithValue(authorizationModuleConfigMapLabel, "true"))
-		Expect(fragmentConfigMap.Data[authorizationModelFragmentHashKey]).NotTo(BeEmpty())
-		Expect(json.Valid([]byte(fragmentConfigMap.Data[authorizationModelFragmentKey]))).To(BeTrue())
 	})
 
 	It("should compile modules from multiple namespaces into one model", func() {

@@ -67,11 +67,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	namespace := tuplewriter.DefaultNamespace
+	if configured := os.Getenv(tupleListenerNamespaceEnv); configured != "" {
+		namespace = configured
+	}
+	releaseName := tuplewriter.DefaultReleaseName
+	if configured := os.Getenv(tupleListenerReleaseEnv); configured != "" {
+		releaseName = configured
+	}
+
 	service := &tuplewriter.Service{
 		Resolver: &tuplewriter.StableReleaseResolver{
 			Client:      k8sClient,
-			Namespace:   envOrDefault(tupleListenerNamespaceEnv, tuplewriter.DefaultNamespace),
-			ReleaseName: envOrDefault(tupleListenerReleaseEnv, tuplewriter.DefaultReleaseName),
+			Namespace:   namespace,
+			ReleaseName: releaseName,
 		},
 		Writer: &tuplewriter.OpenFGAWriter{
 			APIURL:   os.Getenv(openFGAAPIURLEnv),
@@ -94,14 +103,6 @@ func main() {
 		setupLog.Error(err, "Failed to run tuple listener")
 		os.Exit(1)
 	}
-}
-
-func envOrDefault(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
 }
 
 func envIntOrDefault(key string, defaultValue int) int {

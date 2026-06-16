@@ -26,15 +26,14 @@ import (
 	"net/url"
 	"sort"
 	"strings"
-	"time"
 
 	openfgaclient "github.com/openfga/go-sdk/client"
-	"github.com/openfga/go-sdk/credentials"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	authv1 "my.domain/fga/api/v1"
+	"my.domain/fga/internal/openfgaconfig"
 )
 
 const (
@@ -92,7 +91,7 @@ type OpenFGATupleReader struct {
 }
 
 func (r *OpenFGATupleReader) ReadObjectTuples(ctx context.Context, stable authv1.AuthorizationModelReleaseState, object string) ([]Tuple, error) {
-	sdkClient, err := openfgaclient.NewSdkClient(r.clientConfiguration(stable.OpenFGAStoreID))
+	sdkClient, err := openfgaclient.NewSdkClient(openfgaconfig.New(r.APIURL, r.APIToken, stable.OpenFGAStoreID))
 	if err != nil {
 		return nil, err
 	}
@@ -124,20 +123,6 @@ func (r *OpenFGATupleReader) ReadObjectTuples(ctx context.Context, stable authv1
 		}
 		continuationToken = &token
 	}
-}
-
-func (r *OpenFGATupleReader) clientConfiguration(storeID string) *openfgaclient.ClientConfiguration {
-	config := &openfgaclient.ClientConfiguration{
-		ApiUrl:  r.APIURL,
-		StoreId: storeID,
-	}
-	if r.APIToken != "" {
-		config.Credentials = &credentials.Credentials{
-			Method: credentials.CredentialsMethodApiToken,
-			Config: &credentials.Config{ApiToken: r.APIToken},
-		}
-	}
-	return config
 }
 
 func (s *Server) Handler() http.Handler {
@@ -431,13 +416,5 @@ func statusForError(err error) int {
 		return http.StatusNotFound
 	default:
 		return http.StatusInternalServerError
-	}
-}
-
-func NewHTTPServer(address string, handler http.Handler) *http.Server {
-	return &http.Server{
-		Addr:              address,
-		Handler:           handler,
-		ReadHeaderTimeout: 5 * time.Second,
 	}
 }

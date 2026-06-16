@@ -17,7 +17,9 @@ limitations under the License.
 package main
 
 import (
+	"net/http"
 	"os"
+	"time"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -63,22 +65,28 @@ func main() {
 		Client:      k8sClient,
 		APIURL:      os.Getenv(openFGAAPIURLEnv),
 		APIToken:    os.Getenv(openFGAAPITokenEnv),
-		Namespace:   envOrDefault(authzProxyNamespaceEnv, authzproxy.DefaultNamespace),
-		ReleaseName: envOrDefault(authzProxyReleaseEnv, authzproxy.DefaultReleaseName),
+		Namespace:   authzproxy.DefaultNamespace,
+		ReleaseName: authzproxy.DefaultReleaseName,
 	}
-	address := envOrDefault(authzProxyAddressEnv, authzproxy.DefaultBindAddress)
+	if namespace := os.Getenv(authzProxyNamespaceEnv); namespace != "" {
+		server.Namespace = namespace
+	}
+	if releaseName := os.Getenv(authzProxyReleaseEnv); releaseName != "" {
+		server.ReleaseName = releaseName
+	}
+	address := authzproxy.DefaultBindAddress
+	if configured := os.Getenv(authzProxyAddressEnv); configured != "" {
+		address = configured
+	}
 
 	setupLog.Info("Starting authorization proxy", "address", address)
-	if err := authzproxy.NewHTTPServer(address, server.Handler()).ListenAndServe(); err != nil {
+	httpServer := &http.Server{
+		Addr:              address,
+		Handler:           server.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	if err := httpServer.ListenAndServe(); err != nil {
 		setupLog.Error(err, "Failed to run authorization proxy")
 		os.Exit(1)
 	}
-}
-
-func envOrDefault(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
 }

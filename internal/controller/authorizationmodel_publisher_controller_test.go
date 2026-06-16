@@ -24,7 +24,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	openfga "github.com/openfga/go-sdk"
-	"github.com/openfga/go-sdk/credentials"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -168,20 +167,6 @@ var _ = Describe("AuthorizationModelPublisher Controller", func() {
 		Expect(publisher.calls).To(Equal(0))
 	})
 
-	It("should configure OpenFGA API token credentials when provided", func() {
-		publisher := &OpenFGAAuthorizationModelPublisher{
-			APIURL:   "https://openfga.example.test",
-			APIToken: "token-1",
-		}
-
-		config := publisher.clientConfiguration("store-1")
-
-		Expect(config.ApiUrl).To(Equal("https://openfga.example.test"))
-		Expect(config.StoreId).To(Equal("store-1"))
-		Expect(config.Credentials).NotTo(BeNil())
-		Expect(config.Credentials.Method).To(Equal(credentials.CredentialsMethodApiToken))
-		Expect(config.Credentials.Config.ApiToken).To(Equal("token-1"))
-	})
 })
 
 type fakeAuthorizationModelPublisher struct {

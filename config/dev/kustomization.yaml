@@ -1,22 +1,3 @@
-# Adds namespace to all resources.
-namespace: bridder-system
-
-# Keep dev resource names aligned with the default install.
-namePrefix: bridder-
-
 resources:
-- ../crd
-- ../rbac
-- ../manager
-- ../tuple-listener
-- ../proxy
-- ../openfga
-- ../nats
-- metrics_service.yaml
-- config-secret.yaml
-
-patches:
-- path: manager_metrics_patch.yaml
-  target:
-    kind: Deployment
-    name: controller-manager
+- ../default
+- extras

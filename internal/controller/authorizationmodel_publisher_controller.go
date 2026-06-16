@@ -24,7 +24,6 @@ import (
 
 	openfga "github.com/openfga/go-sdk"
 	openfgaclient "github.com/openfga/go-sdk/client"
-	"github.com/openfga/go-sdk/credentials"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,6 +36,7 @@ import (
 
 	authv1 "my.domain/fga/api/v1"
 	"my.domain/fga/internal/model"
+	"my.domain/fga/internal/openfgaconfig"
 )
 
 const (
@@ -98,7 +98,7 @@ func (p *OpenFGAAuthorizationModelPublisher) PublishCandidate(ctx context.Contex
 		storeName = defaultOpenFGAStoreName
 	}
 
-	sdkClient, err := openfgaclient.NewSdkClient(p.clientConfiguration(storeID))
+	sdkClient, err := openfgaclient.NewSdkClient(openfgaconfig.New(p.APIURL, p.APIToken, storeID))
 	if err != nil {
 		return PublishedAuthorizationModel{}, err
 	}
@@ -125,20 +125,6 @@ func (p *OpenFGAAuthorizationModelPublisher) PublishCandidate(ctx context.Contex
 		StoreID: storeID,
 		ModelID: response.GetAuthorizationModelId(),
 	}, nil
-}
-
-func (p *OpenFGAAuthorizationModelPublisher) clientConfiguration(storeID string) *openfgaclient.ClientConfiguration {
-	config := &openfgaclient.ClientConfiguration{
-		ApiUrl:  p.APIURL,
-		StoreId: storeID,
-	}
-	if p.APIToken != "" {
-		config.Credentials = &credentials.Credentials{
-			Method: credentials.CredentialsMethodApiToken,
-			Config: &credentials.Config{ApiToken: p.APIToken},
-		}
-	}
-	return config
 }
 
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;patch;update
