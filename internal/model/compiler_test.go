@@ -130,6 +130,23 @@ func TestCompileRejectsUnknownPermissionReference(t *testing.T) {
 	}
 }
 
+func TestCompileTypeOnlyModule(t *testing.T) {
+	authModule := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "user-auth", Namespace: "core"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "user",
+		},
+	}
+
+	got, err := Compile([]authv1.AuthorizationModule{authModule})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	if diff := cmp.Diff(openfga.TypeDefinition{Type: "user"}, typeDefinition(t, got, "user")); diff != "" {
+		t.Fatalf("user type mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestCompileInheritedRole(t *testing.T) {
 	folder := authv1.AuthorizationModule{
 		ObjectMeta: metav1.ObjectMeta{Name: "folder-auth", Namespace: "platform"},
@@ -174,6 +191,34 @@ func TestCompileInheritedRole(t *testing.T) {
 	}
 	if diff := cmp.Diff(wantReader, (*fileRelations)["reader"]); diff != "" {
 		t.Fatalf("reader relation mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCompileSameResourceInheritedRole(t *testing.T) {
+	authModule := authv1.AuthorizationModule{
+		ObjectMeta: metav1.ObjectMeta{Name: "namespace-auth", Namespace: "auth"},
+		Spec: authv1.AuthorizationModuleSpec{
+			Resource: "namespace",
+			Roles: map[string]authv1.AuthorizationRole{
+				"owner": {
+					Subjects: []authv1.AuthorizationSubject{{Type: "user"}},
+				},
+				"operator": {
+					Inherited: []authv1.InheritedRelation{{Relation: "owner"}},
+				},
+			},
+		},
+	}
+
+	got, err := Compile([]authv1.AuthorizationModule{authModule})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+
+	operator := (*typeDefinition(t, got, "namespace").Relations)["operator"]
+	want := openfga.Userset{ComputedUserset: ptr(objectRelation("owner"))}
+	if diff := cmp.Diff(want, operator); diff != "" {
+		t.Fatalf("operator relation mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -363,6 +408,26 @@ func TestMarshalWriteRequestValidatesAgainstOpenFGASDK(t *testing.T) {
 	}
 	if len(request.TypeDefinitions) != 2 {
 		t.Fatalf("TypeDefinitions length = %d, want 2", len(request.TypeDefinitions))
+	}
+}
+
+func TestMarshalWriteRequestRunsOpenFGAValidation(t *testing.T) {
+	authorizationModel := AuthorizationModel{
+		SchemaVersion: "1.1",
+		TypeDefinitions: []openfga.TypeDefinition{
+			{
+				Type: "document",
+				Relations: ptr(map[string]openfga.Userset{
+					"viewer": directUserset(),
+				}),
+			},
+			{Type: "user"},
+		},
+	}
+
+	_, err := MarshalWriteRequest(authorizationModel)
+	if err == nil || !strings.Contains(err.Error(), "assignable") {
+		t.Fatalf("MarshalWriteRequest() error = %v, want OpenFGA validation error", err)
 	}
 }
 

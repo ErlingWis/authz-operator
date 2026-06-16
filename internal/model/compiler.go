@@ -17,14 +17,19 @@ limitations under the License.
 package model
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
+	pb "github.com/openfga/api/proto/openfga/v1"
 	openfga "github.com/openfga/go-sdk"
+	"github.com/openfga/openfga/pkg/typesystem"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	authv1 "my.domain/fga/api/v1"
 )
@@ -131,6 +136,81 @@ func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 	return model, nil
 }
 
+// Fragment returns the compiled OpenFGA type owned by one AuthorizationModule.
+func Fragment(module authv1.AuthorizationModule, authorizationModel AuthorizationModel) (AuthorizationModel, error) {
+	referencedTypes := map[string]struct{}{module.Spec.Resource: {}}
+	for _, role := range module.Spec.Roles {
+		for _, subject := range role.Subjects {
+			if subject.Type != "" {
+				referencedTypes[subject.Type] = struct{}{}
+			}
+		}
+	}
+	for _, topology := range module.Spec.Topology {
+		for _, resource := range topology.Resources {
+			referencedTypes[resource] = struct{}{}
+		}
+	}
+
+	fragment := AuthorizationModel{SchemaVersion: authorizationModel.SchemaVersion}
+	for _, typeDef := range authorizationModel.TypeDefinitions {
+		if _, ok := referencedTypes[typeDef.Type]; !ok {
+			continue
+		}
+		if typeDef.Type != module.Spec.Resource {
+			typeDef = openfga.TypeDefinition{Type: typeDef.Type}
+		}
+		fragment.TypeDefinitions = append(fragment.TypeDefinitions, typeDef)
+	}
+	if len(fragment.TypeDefinitions) > 0 {
+		return fragment, nil
+	}
+	return AuthorizationModel{}, fmt.Errorf("%s/%s: compiled model does not contain resource %q", module.Namespace, module.Name, module.Spec.Resource)
+}
+
+// Merge combines compiled module fragments into one deterministic authorization model.
+func Merge(fragments []AuthorizationModel) (AuthorizationModel, error) {
+	merged := AuthorizationModel{SchemaVersion: schemaVersion}
+	types := map[string]openfga.TypeDefinition{}
+
+	for _, fragment := range fragments {
+		if fragment.SchemaVersion != schemaVersion {
+			return AuthorizationModel{}, fmt.Errorf("schema_version %q is unsupported", fragment.SchemaVersion)
+		}
+		for _, typeDef := range fragment.TypeDefinitions {
+			existing, ok := types[typeDef.Type]
+			if ok {
+				if isStub(existing) || reflect.DeepEqual(existing, typeDef) {
+					types[typeDef.Type] = typeDef
+					continue
+				}
+				if isStub(typeDef) {
+					continue
+				}
+				return AuthorizationModel{}, fmt.Errorf("type %q is defined by multiple authorization module fragments", typeDef.Type)
+			}
+			types[typeDef.Type] = typeDef
+		}
+	}
+
+	typeNames := make([]string, 0, len(types))
+	for name := range types {
+		typeNames = append(typeNames, name)
+	}
+	sort.Strings(typeNames)
+	for _, name := range typeNames {
+		merged.TypeDefinitions = append(merged.TypeDefinitions, types[name])
+	}
+	if len(merged.TypeDefinitions) == 0 {
+		return AuthorizationModel{}, fmt.Errorf("type_definitions is required")
+	}
+	return merged, nil
+}
+
+func isStub(typeDef openfga.TypeDefinition) bool {
+	return typeDef.Relations == nil && typeDef.Metadata == nil
+}
+
 // MarshalStable returns the stable JSON representation used for hashing.
 func MarshalStable(model AuthorizationModel) ([]byte, error) {
 	return json.Marshal(model)
@@ -139,6 +219,22 @@ func MarshalStable(model AuthorizationModel) ([]byte, error) {
 // MarshalWriteRequest returns the JSON payload accepted by OpenFGA's
 // WriteAuthorizationModel API and validates it against the SDK request type.
 func MarshalWriteRequest(model AuthorizationModel) ([]byte, error) {
+	data, err := MarshalRequest(model)
+	if err != nil {
+		return nil, err
+	}
+	request, err := ParseWriteRequest(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := Validate(request); err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+// MarshalRequest returns formatted authorization model JSON without semantic validation.
+func MarshalRequest(model AuthorizationModel) ([]byte, error) {
 	data, err := json.MarshalIndent(model, "", "  ")
 	if err != nil {
 		return nil, err
@@ -162,6 +258,23 @@ func ParseWriteRequest(data []byte) (openfga.WriteAuthorizationModelRequest, err
 		return openfga.WriteAuthorizationModelRequest{}, fmt.Errorf("type_definitions is required")
 	}
 	return request, nil
+}
+
+// Validate runs the same official OpenFGA typesystem validator used by `fga model validate`.
+func Validate(model AuthorizationModel) error {
+	data, err := json.Marshal(model)
+	if err != nil {
+		return err
+	}
+
+	protoModel := &pb.AuthorizationModel{}
+	if err := protojson.Unmarshal(data, protoModel); err != nil {
+		return fmt.Errorf("unable to parse authorization model JSON: %w", err)
+	}
+	if _, err := typesystem.NewAndValidate(context.Background(), protoModel); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Hash returns a SHA-256 hash of the model's stable JSON representation.
@@ -215,7 +328,9 @@ func compileModule(module authv1.AuthorizationModule, typeDef *openfga.TypeDefin
 		relations[permissionName] = userset
 	}
 
-	typeDef.Relations = ptr(relations)
+	if len(relations) > 0 {
+		typeDef.Relations = ptr(relations)
+	}
 	if len(metadata) > 0 {
 		typeDef.Metadata = &openfga.Metadata{Relations: ptr(metadata)}
 	}
@@ -233,10 +348,20 @@ func compileRole(module authv1.AuthorizationModule, name string, role authv1.Aut
 	}
 
 	for _, inherited := range role.Inherited {
-		if err := validateRelationName(module, "inherited via", inherited.Via); err != nil {
+		if err := validateRelationName(module, "inherited relation", inherited.Relation); err != nil {
 			return openfga.Userset{}, err
 		}
-		if err := validateRelationName(module, "inherited relation", inherited.Relation); err != nil {
+		if inherited.Via == "" {
+			targetRelations := relationNamesByResource[module.Spec.Resource]
+			if _, ok := targetRelations[inherited.Relation]; !ok {
+				return openfga.Userset{}, fmt.Errorf("%s/%s: role %q inherits unknown relation %q", module.Namespace, module.Name, name, inherited.Relation)
+			}
+			children = append(children, openfga.Userset{
+				ComputedUserset: ptr(objectRelation(inherited.Relation)),
+			})
+			continue
+		}
+		if err := validateRelationName(module, "inherited via", inherited.Via); err != nil {
 			return openfga.Userset{}, err
 		}
 		topology, ok := module.Spec.Topology[inherited.Via]

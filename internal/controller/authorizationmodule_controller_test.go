@@ -85,6 +85,15 @@ var _ = Describe("AuthorizationModule Controller", func() {
 		}, &configMap)).To(Succeed())
 		Expect(configMap.Data[authorizationModelHashKey]).To(Equal(reconciled.Status.ObservedModelHash))
 		Expect(json.Valid([]byte(configMap.Data[authorizationModelConfigMapKey]))).To(BeTrue())
+
+		var fragmentConfigMap corev1.ConfigMap
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      authorizationModuleConfigMapName(resource.Name),
+			Namespace: resource.Namespace,
+		}, &fragmentConfigMap)).To(Succeed())
+		Expect(fragmentConfigMap.Labels).To(HaveKeyWithValue(authorizationModuleConfigMapLabel, "true"))
+		Expect(fragmentConfigMap.Data[authorizationModelFragmentHashKey]).NotTo(BeEmpty())
+		Expect(json.Valid([]byte(fragmentConfigMap.Data[authorizationModelFragmentKey]))).To(BeTrue())
 	})
 
 	It("should compile modules from multiple namespaces into one model", func() {
@@ -102,7 +111,6 @@ var _ = Describe("AuthorizationModule Controller", func() {
 					"editor": {
 						Subjects: []authv1.AuthorizationSubject{
 							{Type: "user"},
-							{Type: "group", Relation: "member"},
 						},
 					},
 					"owner": {
@@ -130,7 +138,6 @@ var _ = Describe("AuthorizationModule Controller", func() {
 					"payer": {
 						Subjects: []authv1.AuthorizationSubject{
 							{Type: "user"},
-							{Type: "project", Relation: "owner"},
 						},
 					},
 					"viewer": {
@@ -180,8 +187,7 @@ var _ = Describe("AuthorizationModule Controller", func() {
 		Expect(paymentMetadata).To(HaveKey("parent"))
 		payerTypes := paymentMetadata["payer"].(map[string]any)["directly_related_user_types"].([]any)
 		Expect(payerTypes).To(ContainElement(SatisfyAll(
-			HaveKeyWithValue("type", "project"),
-			HaveKeyWithValue("relation", "owner"),
+			HaveKeyWithValue("type", "user"),
 		)))
 		paymentRelations := relationsForType(typeDefinitions, "payment")
 		viewerRelation := paymentRelations["viewer"].(map[string]any)

@@ -33,9 +33,8 @@ type AuthorizationModuleSpec struct {
 	Topology map[string]TopologyRelation `json:"topology,omitempty"`
 
 	// roles define directly assignable relationships on this resource.
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinProperties=1
-	Roles map[string]AuthorizationRole `json:"roles"`
+	// +optional
+	Roles map[string]AuthorizationRole `json:"roles,omitempty"`
 
 	// permissions define computed relationships derived from roles or other permissions.
 	// +optional
@@ -67,11 +66,11 @@ type AuthorizationRole struct {
 
 // InheritedRelation defines a relation reached through a topology relation.
 type InheritedRelation struct {
-	// via is the topology relation to follow on this resource.
-	// +kubebuilder:validation:Required
+	// via is the topology relation to follow on this resource. When omitted, relation is inherited from this resource.
+	// +optional
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:Pattern=`^[a-z][a-z0-9_]*$`
-	Via string `json:"via"`
+	Via string `json:"via,omitempty"`
 
 	// relation is the relation to compute on the related resource.
 	// +kubebuilder:validation:Required

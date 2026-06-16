@@ -81,13 +81,13 @@ spec:
                             type: string
                           via:
                             description: via is the topology relation to follow on
+                              this resource. When omitted, relation is inherited from
                               this resource.
                             minLength: 1
                             pattern: ^[a-z][a-z0-9_]*$
                             type: string
                         required:
                         - relation
-                        - via
                         type: object
                       minItems: 1
                       type: array
@@ -118,7 +118,6 @@ spec:
                   type: object
                 description: roles define directly assignable relationships on this
                   resource.
-                minProperties: 1
                 type: object
               topology:
                 additionalProperties:
@@ -142,7 +141,6 @@ spec:
                 type: object
             required:
             - resource
-            - roles
             type: object
           status:
             description: status defines the observed state of AuthorizationModule

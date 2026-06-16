@@ -4,13 +4,10 @@ metadata:
   labels:
     app.kubernetes.io/name: bridder
     app.kubernetes.io/managed-by: kustomize
-  name: group-authorization
+  name: user-authorization
+  namespace: core
 spec:
-  resource: group
-  roles:
-    member:
-      subjects:
-        - type: user
+  resource: user
 ---
 apiVersion: auth.bridder.io/v1
 kind: AuthorizationModule
@@ -18,13 +15,41 @@ metadata:
   labels:
     app.kubernetes.io/name: bridder
     app.kubernetes.io/managed-by: kustomize
-  name: organization-authorization
+  name: namespace-authorization
+  namespace: auth
 spec:
-  resource: organization
+  resource: namespace
   roles:
     owner:
       subjects:
         - type: user
+    operator:
+      subjects:
+        - type: user
+      inherited:
+        - relation: owner
+    reader:
+      subjects:
+        - type: user
+      inherited:
+        - relation: operator
+
+  permissions:
+    can_view:
+      anyOf:
+        - reader
+    can_delete:
+      anyOf:
+        - owner
+    can_manage_roles:
+      anyOf:
+        - owner
+    can_edit:
+      anyOf:
+        - operator
+    can_create_scope:
+      anyOf:
+        - operator
 ---
 apiVersion: auth.bridder.io/v1
 kind: AuthorizationModule
@@ -32,32 +57,44 @@ metadata:
   labels:
     app.kubernetes.io/name: bridder
     app.kubernetes.io/managed-by: kustomize
-  name: project-authorization
+  name: scope-authorization
+  namespace: auth
 spec:
-  resource: project
+  resource: scope
   topology:
     parent:
       resources:
-        - organization
+        - namespace
   roles:
     owner:
-      subjects:
-        - type: user
-    editor:
-      subjects:
-        - type: user
-        - type: group
-          relation: member
-    viewer:
+      inherited:
+        - relation: owner
+          via: parent
+    operator:
+      inherited:
+        - relation: operator
+          via: parent
+    reader:
       inherited:
         - via: parent
-          relation: owner
+          relation: reader
+    accessor:
+      subjects:
+        - type: user
+
   permissions:
-    view:
+    can_view:
       anyOf:
-        - owner
-        - editor
-        - viewer
-    delete:
+        - reader
+    can_delete:
       anyOf:
-        - owner
+        - operator
+    can_manage_roles:
+      anyOf:
+        - operator
+    can_edit:
+      anyOf:
+        - operator
+    can_access:
+      anyOf:
+        - accessor
