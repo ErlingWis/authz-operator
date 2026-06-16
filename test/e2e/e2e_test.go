@@ -63,6 +63,15 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
 
+		By("creating the Bridder config secret")
+		cmd = exec.Command("kubectl", "-n", namespace, "create", "secret", "generic", "bridder-config",
+			"--from-literal=OPENFGA_API_URL=http://bridder-openfga:8080",
+			"--from-literal=OPENFGA_STORE_NAME=bridder",
+			"--from-literal=NATS_URL=nats://bridder-nats:4222",
+		)
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to create Bridder config secret")
+
 		By("installing CRDs")
 		cmd = exec.Command("make", "install")
 		_, err = utils.Run(cmd)

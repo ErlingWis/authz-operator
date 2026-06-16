@@ -70,6 +70,11 @@ make lint-fix   # Auto-fix code style
 make test       # Run unit tests
 ```
 
+**After finishing a feature:**
+```
+make test-e2e   # End to end test
+```
+
 ## CLI Commands Cheat Sheet
 
 ### Create API (your own types)
