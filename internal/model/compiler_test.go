@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	openfga "github.com/openfga/go-sdk"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authv1 "my.domain/fga/api/v1"
@@ -64,45 +65,39 @@ func TestCompile(t *testing.T) {
 
 	want := AuthorizationModel{
 		SchemaVersion: "1.1",
-		TypeDefinition: []TypeDefinition{
+		TypeDefinitions: []openfga.TypeDefinition{
 			{Type: "group"},
 			{Type: "organization"},
 			{
 				Type: "project",
-				Relations: map[string]Userset{
+				Relations: ptr(map[string]openfga.Userset{
 					"delete": {
-						ComputedUserset: &ObjectRelation{Object: "", Relation: "owner"},
+						ComputedUserset: ptr(objectRelation("owner")),
 					},
-					"editor": {
-						This: &ThisUserset{},
-					},
-					"owner": {
-						This: &ThisUserset{},
-					},
-					"parent": {
-						This: &ThisUserset{},
-					},
+					"editor": directUserset(),
+					"owner":  directUserset(),
+					"parent": directUserset(),
 					"view": {
-						Union: &UsersetUnion{Child: []Userset{
-							{ComputedUserset: &ObjectRelation{Object: "", Relation: "owner"}},
-							{ComputedUserset: &ObjectRelation{Object: "", Relation: "editor"}},
+						Union: &openfga.Usersets{Child: []openfga.Userset{
+							{ComputedUserset: ptr(objectRelation("owner"))},
+							{ComputedUserset: ptr(objectRelation("editor"))},
 						}},
 					},
-				},
-				Metadata: &TypeMetadata{Relations: map[string]RelationMetadata{
+				}),
+				Metadata: &openfga.Metadata{Relations: ptr(map[string]openfga.RelationMetadata{
 					"editor": {
-						DirectlyRelatedUserTypes: []RelationReference{
-							{Type: "group", Relation: "member"},
+						DirectlyRelatedUserTypes: ptr([]openfga.RelationReference{
+							{Type: "group", Relation: ptr("member")},
 							{Type: "user"},
-						},
+						}),
 					},
 					"owner": {
-						DirectlyRelatedUserTypes: []RelationReference{{Type: "user"}},
+						DirectlyRelatedUserTypes: ptr([]openfga.RelationReference{{Type: "user"}}),
 					},
 					"parent": {
-						DirectlyRelatedUserTypes: []RelationReference{{Type: "organization"}},
+						DirectlyRelatedUserTypes: ptr([]openfga.RelationReference{{Type: "organization"}}),
 					},
-				}},
+				})},
 			},
 			{Type: "user"},
 		},
@@ -171,13 +166,13 @@ func TestCompileInheritedRole(t *testing.T) {
 	}
 
 	fileRelations := typeDefinition(t, got, "file").Relations
-	wantReader := Userset{
-		TupleToUserset: &TupleToUserset{
-			Tupleset:        ObjectRelation{Object: "", Relation: "parent"},
-			ComputedUserset: ObjectRelation{Object: "", Relation: "reader"},
+	wantReader := openfga.Userset{
+		TupleToUserset: &openfga.TupleToUserset{
+			Tupleset:        objectRelation("parent"),
+			ComputedUserset: objectRelation("reader"),
 		},
 	}
-	if diff := cmp.Diff(wantReader, fileRelations["reader"]); diff != "" {
+	if diff := cmp.Diff(wantReader, (*fileRelations)["reader"]); diff != "" {
 		t.Fatalf("reader relation mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -213,12 +208,12 @@ func TestCompileMixedDirectAndInheritedRole(t *testing.T) {
 		t.Fatalf("Compile() error = %v", err)
 	}
 
-	reader := typeDefinition(t, got, "file").Relations["reader"]
-	want := Userset{Union: &UsersetUnion{Child: []Userset{
-		{This: &ThisUserset{}},
-		{TupleToUserset: &TupleToUserset{
-			Tupleset:        ObjectRelation{Object: "", Relation: "parent"},
-			ComputedUserset: ObjectRelation{Object: "", Relation: "reader"},
+	reader := (*typeDefinition(t, got, "file").Relations)["reader"]
+	want := openfga.Userset{Union: &openfga.Usersets{Child: []openfga.Userset{
+		directUserset(),
+		{TupleToUserset: &openfga.TupleToUserset{
+			Tupleset:        objectRelation("parent"),
+			ComputedUserset: objectRelation("reader"),
 		}},
 	}}}
 	if diff := cmp.Diff(want, reader); diff != "" {
@@ -385,13 +380,13 @@ func module(name string) authv1.AuthorizationModule {
 	}
 }
 
-func typeDefinition(t *testing.T, model AuthorizationModel, name string) TypeDefinition {
+func typeDefinition(t *testing.T, model AuthorizationModel, name string) openfga.TypeDefinition {
 	t.Helper()
-	for _, typeDef := range model.TypeDefinition {
+	for _, typeDef := range model.TypeDefinitions {
 		if typeDef.Type == name {
 			return typeDef
 		}
 	}
 	t.Fatalf("type definition %q not found", name)
-	return TypeDefinition{}
+	return openfga.TypeDefinition{}
 }

@@ -31,75 +31,20 @@ import (
 
 const schemaVersion = "1.1"
 
-// AuthorizationModel is the OpenFGA JSON authorization model accepted by the API.
-type AuthorizationModel struct {
-	SchemaVersion  string           `json:"schema_version"`
-	TypeDefinition []TypeDefinition `json:"type_definitions"`
-}
-
-// TypeDefinition is an OpenFGA object type definition.
-type TypeDefinition struct {
-	Type      string             `json:"type"`
-	Relations map[string]Userset `json:"relations,omitempty"`
-	Metadata  *TypeMetadata      `json:"metadata,omitempty"`
-}
-
-// TypeMetadata carries direct relationship type restrictions.
-type TypeMetadata struct {
-	Relations map[string]RelationMetadata `json:"relations"`
-}
-
-// RelationMetadata carries direct relationship type restrictions for a relation.
-type RelationMetadata struct {
-	DirectlyRelatedUserTypes []RelationReference `json:"directly_related_user_types"`
-}
-
-// RelationReference identifies a directly assignable type or userset.
-type RelationReference struct {
-	Type     string `json:"type"`
-	Relation string `json:"relation,omitempty"`
-}
-
-// Userset is an OpenFGA userset expression.
-type Userset struct {
-	This            *ThisUserset    `json:"this,omitempty"`
-	ComputedUserset *ObjectRelation `json:"computedUserset,omitempty"`
-	TupleToUserset  *TupleToUserset `json:"tupleToUserset,omitempty"`
-	Union           *UsersetUnion   `json:"union,omitempty"`
-}
-
-// ThisUserset allows direct relationships.
-type ThisUserset struct{}
-
-// ObjectRelation references a relation on the current object.
-type ObjectRelation struct {
-	Object   string `json:"object"`
-	Relation string `json:"relation"`
-}
-
-// TupleToUserset follows a relation to another object and computes a relation there.
-type TupleToUserset struct {
-	Tupleset        ObjectRelation `json:"tupleset"`
-	ComputedUserset ObjectRelation `json:"computedUserset"`
-}
-
-// UsersetUnion grants access when any child userset matches.
-type UsersetUnion struct {
-	Child []Userset `json:"child"`
-}
+type AuthorizationModel = openfga.WriteAuthorizationModelRequest
 
 // Compile builds one deterministic OpenFGA authorization model from module specs.
 func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 	model := AuthorizationModel{SchemaVersion: schemaVersion}
-	types := map[string]*TypeDefinition{}
+	types := map[string]*openfga.TypeDefinition{}
 	moduleByResource := map[string]string{}
 	relationNamesByResource := map[string]map[string]struct{}{}
 
-	ensureType := func(name string) *TypeDefinition {
+	ensureType := func(name string) *openfga.TypeDefinition {
 		if typeDef, ok := types[name]; ok {
 			return typeDef
 		}
-		typeDef := &TypeDefinition{Type: name}
+		typeDef := &openfga.TypeDefinition{Type: name}
 		types[name] = typeDef
 		return typeDef
 	}
@@ -180,7 +125,7 @@ func Compile(modules []authv1.AuthorizationModule) (AuthorizationModel, error) {
 	sort.Strings(typeNames)
 
 	for _, name := range typeNames {
-		model.TypeDefinition = append(model.TypeDefinition, *types[name])
+		model.TypeDefinitions = append(model.TypeDefinitions, *types[name])
 	}
 
 	return model, nil
@@ -229,9 +174,9 @@ func Hash(model AuthorizationModel) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition, relationNamesByResource map[string]map[string]struct{}) error {
-	relations := map[string]Userset{}
-	metadata := map[string]RelationMetadata{}
+func compileModule(module authv1.AuthorizationModule, typeDef *openfga.TypeDefinition, relationNamesByResource map[string]map[string]struct{}) error {
+	relations := map[string]openfga.Userset{}
+	metadata := map[string]openfga.RelationMetadata{}
 
 	topologyNames := sortedKeys(module.Spec.Topology)
 	for _, topologyName := range topologyNames {
@@ -239,9 +184,9 @@ func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition, r
 		if len(topology.Resources) == 0 {
 			return fmt.Errorf("%s/%s: topology relation %q must reference at least one resource", module.Namespace, module.Name, topologyName)
 		}
-		relations[topologyName] = Userset{This: &ThisUserset{}}
-		metadata[topologyName] = RelationMetadata{
-			DirectlyRelatedUserTypes: topologyRelationReferences(topology.Resources),
+		relations[topologyName] = directUserset()
+		metadata[topologyName] = openfga.RelationMetadata{
+			DirectlyRelatedUserTypes: ptr(topologyRelationReferences(topology.Resources)),
 		}
 	}
 
@@ -254,8 +199,8 @@ func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition, r
 		}
 		relations[roleName] = userset
 		if len(role.Subjects) > 0 {
-			metadata[roleName] = RelationMetadata{
-				DirectlyRelatedUserTypes: relationReferences(role.Subjects),
+			metadata[roleName] = openfga.RelationMetadata{
+				DirectlyRelatedUserTypes: ptr(relationReferences(role.Subjects)),
 			}
 		}
 	}
@@ -270,44 +215,44 @@ func compileModule(module authv1.AuthorizationModule, typeDef *TypeDefinition, r
 		relations[permissionName] = userset
 	}
 
-	typeDef.Relations = relations
+	typeDef.Relations = ptr(relations)
 	if len(metadata) > 0 {
-		typeDef.Metadata = &TypeMetadata{Relations: metadata}
+		typeDef.Metadata = &openfga.Metadata{Relations: ptr(metadata)}
 	}
 	return nil
 }
 
-func compileRole(module authv1.AuthorizationModule, name string, role authv1.AuthorizationRole, relationNamesByResource map[string]map[string]struct{}) (Userset, error) {
+func compileRole(module authv1.AuthorizationModule, name string, role authv1.AuthorizationRole, relationNamesByResource map[string]map[string]struct{}) (openfga.Userset, error) {
 	if len(role.Subjects) == 0 && len(role.Inherited) == 0 {
-		return Userset{}, fmt.Errorf("%s/%s: role %q must define subjects or inherited relations", module.Namespace, module.Name, name)
+		return openfga.Userset{}, fmt.Errorf("%s/%s: role %q must define subjects or inherited relations", module.Namespace, module.Name, name)
 	}
 
-	children := make([]Userset, 0, 1+len(role.Inherited))
+	children := make([]openfga.Userset, 0, 1+len(role.Inherited))
 	if len(role.Subjects) > 0 {
-		children = append(children, Userset{This: &ThisUserset{}})
+		children = append(children, directUserset())
 	}
 
 	for _, inherited := range role.Inherited {
 		if err := validateRelationName(module, "inherited via", inherited.Via); err != nil {
-			return Userset{}, err
+			return openfga.Userset{}, err
 		}
 		if err := validateRelationName(module, "inherited relation", inherited.Relation); err != nil {
-			return Userset{}, err
+			return openfga.Userset{}, err
 		}
 		topology, ok := module.Spec.Topology[inherited.Via]
 		if !ok {
-			return Userset{}, fmt.Errorf("%s/%s: role %q inherits through unknown topology relation %q", module.Namespace, module.Name, name, inherited.Via)
+			return openfga.Userset{}, fmt.Errorf("%s/%s: role %q inherits through unknown topology relation %q", module.Namespace, module.Name, name, inherited.Via)
 		}
 		for _, resource := range topology.Resources {
 			targetRelations := relationNamesByResource[resource]
 			if _, ok := targetRelations[inherited.Relation]; !ok {
-				return Userset{}, fmt.Errorf("%s/%s: role %q inherits relation %q through %q, but resource %q does not define that relation", module.Namespace, module.Name, name, inherited.Relation, inherited.Via, resource)
+				return openfga.Userset{}, fmt.Errorf("%s/%s: role %q inherits relation %q through %q, but resource %q does not define that relation", module.Namespace, module.Name, name, inherited.Relation, inherited.Via, resource)
 			}
 		}
-		children = append(children, Userset{
-			TupleToUserset: &TupleToUserset{
-				Tupleset:        ObjectRelation{Object: "", Relation: inherited.Via},
-				ComputedUserset: ObjectRelation{Object: "", Relation: inherited.Relation},
+		children = append(children, openfga.Userset{
+			TupleToUserset: &openfga.TupleToUserset{
+				Tupleset:        objectRelation(inherited.Via),
+				ComputedUserset: objectRelation(inherited.Relation),
 			},
 		})
 	}
@@ -315,34 +260,34 @@ func compileRole(module authv1.AuthorizationModule, name string, role authv1.Aut
 	if len(children) == 1 {
 		return children[0], nil
 	}
-	return Userset{Union: &UsersetUnion{Child: children}}, nil
+	return openfga.Userset{Union: &openfga.Usersets{Child: children}}, nil
 }
 
-func compilePermission(module authv1.AuthorizationModule, name string, permission authv1.AuthorizationPermission, relations map[string]Userset) (Userset, error) {
+func compilePermission(module authv1.AuthorizationModule, name string, permission authv1.AuthorizationPermission, relations map[string]openfga.Userset) (openfga.Userset, error) {
 	if len(permission.AnyOf) == 0 {
-		return Userset{}, fmt.Errorf("%s/%s: permission %q must reference at least one relation", module.Namespace, module.Name, name)
+		return openfga.Userset{}, fmt.Errorf("%s/%s: permission %q must reference at least one relation", module.Namespace, module.Name, name)
 	}
 
-	children := make([]Userset, 0, len(permission.AnyOf))
+	children := make([]openfga.Userset, 0, len(permission.AnyOf))
 	for _, relation := range permission.AnyOf {
 		if _, ok := relations[relation]; !ok {
-			return Userset{}, fmt.Errorf("%s/%s: permission %q references unknown relation %q", module.Namespace, module.Name, name, relation)
+			return openfga.Userset{}, fmt.Errorf("%s/%s: permission %q references unknown relation %q", module.Namespace, module.Name, name, relation)
 		}
-		children = append(children, Userset{
-			ComputedUserset: &ObjectRelation{Object: "", Relation: relation},
+		children = append(children, openfga.Userset{
+			ComputedUserset: ptr(objectRelation(relation)),
 		})
 	}
 
 	if len(children) == 1 {
 		return children[0], nil
 	}
-	return Userset{Union: &UsersetUnion{Child: children}}, nil
+	return openfga.Userset{Union: &openfga.Usersets{Child: children}}, nil
 }
 
-func topologyRelationReferences(resources []string) []RelationReference {
-	references := make([]RelationReference, 0, len(resources))
+func topologyRelationReferences(resources []string) []openfga.RelationReference {
+	references := make([]openfga.RelationReference, 0, len(resources))
 	for _, resource := range resources {
-		references = append(references, RelationReference{Type: resource})
+		references = append(references, openfga.RelationReference{Type: resource})
 	}
 	sort.Slice(references, func(i, j int) bool {
 		return references[i].Type < references[j].Type
@@ -350,17 +295,40 @@ func topologyRelationReferences(resources []string) []RelationReference {
 	return references
 }
 
-func relationReferences(subjects []authv1.AuthorizationSubject) []RelationReference {
-	references := make([]RelationReference, 0, len(subjects))
+func relationReferences(subjects []authv1.AuthorizationSubject) []openfga.RelationReference {
+	references := make([]openfga.RelationReference, 0, len(subjects))
 	for _, subject := range subjects {
-		references = append(references, RelationReference{Type: subject.Type, Relation: subject.Relation})
+		reference := openfga.RelationReference{Type: subject.Type}
+		if subject.Relation != "" {
+			reference.Relation = ptr(subject.Relation)
+		}
+		references = append(references, reference)
 	}
 	sort.Slice(references, func(i, j int) bool {
-		left := references[i].Type + "#" + references[i].Relation
-		right := references[j].Type + "#" + references[j].Relation
+		left := references[i].Type + "#" + relation(references[i])
+		right := references[j].Type + "#" + relation(references[j])
 		return left < right
 	})
 	return references
+}
+
+func directUserset() openfga.Userset {
+	return openfga.Userset{This: ptr(map[string]any{})}
+}
+
+func objectRelation(relation string) openfga.ObjectRelation {
+	return openfga.ObjectRelation{Object: ptr(""), Relation: ptr(relation)}
+}
+
+func relation(reference openfga.RelationReference) string {
+	if reference.Relation == nil {
+		return ""
+	}
+	return *reference.Relation
+}
+
+func ptr[T any](value T) *T {
+	return &value
 }
 
 func validateRelationName(module authv1.AuthorizationModule, kind, name string) error {
