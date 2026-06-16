@@ -174,8 +174,8 @@ func newTestServer(t *testing.T, objects ...client.Object) testServer {
 	}}
 }
 
-func (s testServer) withHTTPClient(client *http.Client) testServer {
-	s.HTTPClient = client
+func (s testServer) withHTTPClient(httpClient *http.Client) testServer {
+	s.HTTPClient = httpClient
 	return s
 }
 

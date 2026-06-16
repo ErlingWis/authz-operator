@@ -196,7 +196,9 @@ func (s *Server) handleAuthZENProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 
 	copyHeader(w.Header(), response.Header)
 	w.WriteHeader(response.StatusCode)
@@ -213,12 +215,12 @@ func (s *Server) handleResourceTypes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	types := make([]string, 0, len(modules))
+	resourceTypes := make([]string, 0, len(modules))
 	for _, module := range modules {
-		types = append(types, module.Spec.Resource)
+		resourceTypes = append(resourceTypes, module.Spec.Resource)
 	}
-	sort.Strings(types)
-	writeJSON(w, http.StatusOK, map[string][]string{"resourceTypes": types})
+	sort.Strings(resourceTypes)
+	writeJSON(w, http.StatusOK, map[string][]string{"resourceTypes": resourceTypes})
 }
 
 func (s *Server) handleResourceType(w http.ResponseWriter, r *http.Request) {
