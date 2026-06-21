@@ -45,9 +45,9 @@ const (
 	defaultModelNamespace           = "bridder-system"
 )
 
-// +kubebuilder:rbac:groups=auth.erli.ng,resources=authorizationmodules,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=auth.erli.ng,resources=authorizationmodules/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=auth.erli.ng,resources=authorizationmodules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=authz.erli.ng,resources=authorizationmodules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=authz.erli.ng,resources=authorizationmodules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=authz.erli.ng,resources=authorizationmodules/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 
 func (r *AuthorizationModuleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

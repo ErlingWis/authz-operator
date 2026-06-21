@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v1 contains API Schema definitions for the auth v1 API group.
+// Package v1 contains API Schema definitions for the authz v1 API group.
 // +kubebuilder:object:generate=true
-// +groupName=auth.erli.ng
+// +groupName=authz.erli.ng
 package v1
 
 import (
@@ -27,7 +27,7 @@ import (
 var (
 	// SchemeGroupVersion is group version used to register these objects.
 	// This name is used by applyconfiguration generators (e.g. controller-gen).
-	SchemeGroupVersion = schema.GroupVersion{Group: "auth.erli.ng", Version: "v1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "authz.erli.ng", Version: "v1"}
 
 	// GroupVersion is an alias for SchemeGroupVersion, for backward compatibility.
 	GroupVersion = SchemeGroupVersion

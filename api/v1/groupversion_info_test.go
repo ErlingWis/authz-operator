@@ -32,7 +32,7 @@ func TestAddToScheme(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ObjectKinds() error = %v", err)
 	}
-	if len(kinds) != 1 || kinds[0].Group != "auth.erli.ng" || kinds[0].Version != "v1" || kinds[0].Kind != "AuthorizationModule" {
-		t.Fatalf("ObjectKinds() = %#v, want auth.erli.ng/v1 AuthorizationModule", kinds)
+	if len(kinds) != 1 || kinds[0].Group != "authz.erli.ng" || kinds[0].Version != "v1" || kinds[0].Kind != "AuthorizationModule" {
+		t.Fatalf("ObjectKinds() = %#v, want authz.erli.ng/v1 AuthorizationModule", kinds)
 	}
 }

@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
-  name: authorizationmodelreleases.auth.erli.ng
+  name: authorizationmodelreleases.authz.erli.ng
 spec:
-  group: auth.erli.ng
+  group: authz.erli.ng
   names:
     kind: AuthorizationModelRelease
     listKind: AuthorizationModelReleaseList

@@ -2,8 +2,8 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-  - bases/auth.erli.ng_authorizationmodules.yaml
-  - bases/auth.erli.ng_authorizationmodelreleases.yaml
+  - bases/authz.erli.ng_authorizationmodules.yaml
+  - bases/authz.erli.ng_authorizationmodelreleases.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

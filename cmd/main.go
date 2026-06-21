@@ -35,7 +35,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	authv1 "erli.ng/authz-operator/api/v1"
+	authzv1 "erli.ng/authz-operator/api/v1"
 	"erli.ng/authz-operator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
@@ -48,7 +48,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(authv1.AddToScheme(scheme))
+	utilruntime.Must(authzv1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 

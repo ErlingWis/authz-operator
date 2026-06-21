@@ -14,7 +14,7 @@ resources:
       namespaced: true
     controller: true
     domain: erli.ng
-    group: auth
+    group: authz
     kind: AuthorizationModule
     path: erli.ng/authz-operator/api/v1
     version: v1
@@ -22,7 +22,7 @@ resources:
       crdVersion: v1
       namespaced: true
     domain: erli.ng
-    group: auth
+    group: authz
     kind: AuthorizationModelRelease
     path: erli.ng/authz-operator/api/v1
     version: v1
