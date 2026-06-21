@@ -21,7 +21,6 @@ spec:
         image: openfga/openfga:v1.16.0
         args:
         - run
-        - --experimentals=authzen
         env:
         - name: OPENFGA_LOG_FORMAT
           value: json

@@ -67,7 +67,6 @@ var _ = Describe("Manager", Ordered, func() {
 		cmd = exec.Command("kubectl", "-n", namespace, "create", "secret", "generic", "bridder-config",
 			"--from-literal=OPENFGA_API_URL=http://bridder-openfga:8080",
 			"--from-literal=OPENFGA_STORE_NAME=bridder",
-			"--from-literal=NATS_URL=nats://bridder-nats:4222",
 		)
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to create Bridder config secret")

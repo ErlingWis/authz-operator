@@ -3,5 +3,4 @@ namePrefix: bridder-
 
 resources:
 - ../../openfga
-- ../../nats
 - config-secret.yaml
