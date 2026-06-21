@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	authv1 "my.domain/fga/api/v1"
-	"my.domain/fga/internal/authzproxy"
+	authv1 "erli.ng/authz-operator/api/v1"
+	"erli.ng/authz-operator/internal/authzproxy"
 )
 
 const (

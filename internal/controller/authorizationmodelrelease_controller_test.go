@@ -29,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	authv1 "my.domain/fga/api/v1"
+	authv1 "erli.ng/authz-operator/api/v1"
 )
 
 var _ = Describe("AuthorizationModelRelease Controller", func() {

@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	authv1 "my.domain/fga/api/v1"
-	"my.domain/fga/internal/controller"
+	authv1 "erli.ng/authz-operator/api/v1"
+	"erli.ng/authz-operator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

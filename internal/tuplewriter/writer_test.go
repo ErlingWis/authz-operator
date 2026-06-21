@@ -27,8 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	authv1 "my.domain/fga/api/v1"
-	"my.domain/fga/internal/tuple"
+	authv1 "erli.ng/authz-operator/api/v1"
+	"erli.ng/authz-operator/internal/tuple"
 )
 
 func TestStableReleaseResolverResolvesStableModel(t *testing.T) {

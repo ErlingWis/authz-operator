@@ -1,4 +1,4 @@
-module my.domain/fga
+module erli.ng/authz-operator
 
 go 1.25.7
 

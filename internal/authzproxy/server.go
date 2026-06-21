@@ -32,8 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	authv1 "my.domain/fga/api/v1"
-	"my.domain/fga/internal/openfgaconfig"
+	authv1 "erli.ng/authz-operator/api/v1"
+	"erli.ng/authz-operator/internal/openfgaconfig"
 )
 
 const (

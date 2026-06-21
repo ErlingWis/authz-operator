@@ -30,7 +30,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"my.domain/fga/test/utils"
+	"erli.ng/authz-operator/test/utils"
 )
 
 // namespace where the project is deployed in

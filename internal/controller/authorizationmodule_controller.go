@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	authv1 "my.domain/fga/api/v1"
-	"my.domain/fga/internal/model"
+	authv1 "erli.ng/authz-operator/api/v1"
+	"erli.ng/authz-operator/internal/model"
 )
 
 // AuthorizationModuleReconciler reconciles a AuthorizationModule object

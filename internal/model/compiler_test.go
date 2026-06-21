@@ -25,7 +25,7 @@ import (
 	openfga "github.com/openfga/go-sdk"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	authv1 "my.domain/fga/api/v1"
+	authv1 "erli.ng/authz-operator/api/v1"
 )
 
 func TestCompile(t *testing.T) {

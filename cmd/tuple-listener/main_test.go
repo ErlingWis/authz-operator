@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"my.domain/fga/internal/tuplelistener"
+	"erli.ng/authz-operator/internal/tuplelistener"
 )
 
 func TestDefaultsAreSet(t *testing.T) {

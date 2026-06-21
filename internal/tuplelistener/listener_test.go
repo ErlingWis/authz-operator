@@ -26,7 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/nats-io/nats.go"
 
-	"my.domain/fga/internal/tuple"
+	"erli.ng/authz-operator/internal/tuple"
 )
 
 func TestProcessAppliesValidMessageAndAcks(t *testing.T) {

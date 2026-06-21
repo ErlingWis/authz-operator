@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"my.domain/fga/internal/authzproxy"
+	"erli.ng/authz-operator/internal/authzproxy"
 )
 
 func TestDefaultsAreSet(t *testing.T) {

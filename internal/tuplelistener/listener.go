@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	"my.domain/fga/internal/tuple"
+	"erli.ng/authz-operator/internal/tuple"
 )
 
 type Applier interface {

@@ -7,7 +7,7 @@ domain: bridder.io
 layout:
 - go.kubebuilder.io/v4
 projectName: bridder
-repo: my.domain/fga
+repo: erli.ng/authz-operator
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: bridder.io
   group: auth
   kind: AuthorizationModule
-  path: my.domain/fga/api/v1
+  path: erli.ng/authz-operator/api/v1
   version: v1
 - api:
     crdVersion: v1
@@ -24,6 +24,6 @@ resources:
   domain: bridder.io
   group: auth
   kind: AuthorizationModelRelease
-  path: my.domain/fga/api/v1
+  path: erli.ng/authz-operator/api/v1
   version: v1
 version: "3"

@@ -29,9 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	authv1 "my.domain/fga/api/v1"
-	"my.domain/fga/internal/tuplelistener"
-	"my.domain/fga/internal/tuplewriter"
+	authv1 "erli.ng/authz-operator/api/v1"
+	"erli.ng/authz-operator/internal/tuplelistener"
+	"erli.ng/authz-operator/internal/tuplewriter"
 )
 
 const (

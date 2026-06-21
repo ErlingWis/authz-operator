@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	authv1 "my.domain/fga/api/v1"
+	authv1 "erli.ng/authz-operator/api/v1"
 )
 
 // AuthorizationModelReleaseReconciler promotes published candidate models to stable.
