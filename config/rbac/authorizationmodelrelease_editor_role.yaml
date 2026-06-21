@@ -1,7 +1,7 @@
 # This rule is not used by the project bridder itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants permissions to create, update, and delete resources within the auth.bridder.io.
+# Grants permissions to create, update, and delete resources within the auth.erli.ng.
 # This role is intended for users who need to manage these resources
 # but should not control RBAC or manage permissions for others.
 
@@ -13,21 +13,21 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: authorizationmodelrelease-editor-role
 rules:
-- apiGroups:
-  - auth.bridder.io
-  resources:
-  - authorizationmodelreleases
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - auth.bridder.io
-  resources:
-  - authorizationmodelreleases/status
-  verbs:
-  - get
+  - apiGroups:
+      - auth.erli.ng
+    resources:
+      - authorizationmodelreleases
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - auth.erli.ng
+    resources:
+      - authorizationmodelreleases/status
+    verbs:
+      - get

@@ -49,12 +49,12 @@ const (
 
 	authorizationModelReleaseName = "bridder-authorization-model"
 
-	annotationCandidateModelHash      = "auth.bridder.io/candidate-model-hash"
-	annotationCandidateOpenFGAModelID = "auth.bridder.io/candidate-openfga-model-id"
-	annotationCandidateOpenFGAStoreID = "auth.bridder.io/candidate-openfga-store-id"
-	annotationCandidatePublishedAt    = "auth.bridder.io/candidate-published-at"
-	annotationPublishError            = "auth.bridder.io/publish-error"
-	annotationPublishErrorAt          = "auth.bridder.io/publish-error-at"
+	annotationCandidateModelHash      = "auth.erli.ng/candidate-model-hash"
+	annotationCandidateOpenFGAModelID = "auth.erli.ng/candidate-openfga-model-id"
+	annotationCandidateOpenFGAStoreID = "auth.erli.ng/candidate-openfga-store-id"
+	annotationCandidatePublishedAt    = "auth.erli.ng/candidate-published-at"
+	annotationPublishError            = "auth.erli.ng/publish-error"
+	annotationPublishErrorAt          = "auth.erli.ng/publish-error-at"
 )
 
 // AuthorizationModelPublisher writes compiled authorization models to OpenFGA.
@@ -128,8 +128,8 @@ func (p *OpenFGAAuthorizationModelPublisher) PublishCandidate(ctx context.Contex
 }
 
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;patch;update
-// +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationmodelreleases,verbs=get;list;watch;create;update;patch
-// +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationmodelreleases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=auth.erli.ng,resources=authorizationmodelreleases,verbs=get;list;watch;create;update;patch
+// +kubebuilder:rbac:groups=auth.erli.ng,resources=authorizationmodelreleases/status,verbs=get;update;patch
 
 func (r *AuthorizationModelPublisherReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)

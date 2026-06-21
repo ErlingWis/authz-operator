@@ -1,4 +1,4 @@
-apiVersion: auth.bridder.io/v1
+apiVersion: auth.erli.ng/v1
 kind: AuthorizationModule
 metadata:
   labels:
@@ -9,7 +9,7 @@ metadata:
 spec:
   resource: user
 ---
-apiVersion: auth.bridder.io/v1
+apiVersion: auth.erli.ng/v1
 kind: AuthorizationModule
 metadata:
   labels:
@@ -51,7 +51,7 @@ spec:
       anyOf:
         - operator
 ---
-apiVersion: auth.bridder.io/v1
+apiVersion: auth.erli.ng/v1
 kind: AuthorizationModule
 metadata:
   labels:

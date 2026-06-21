@@ -2,8 +2,8 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/auth.bridder.io_authorizationmodules.yaml
-- bases/auth.bridder.io_authorizationmodelreleases.yaml
+  - bases/auth.erli.ng_authorizationmodules.yaml
+  - bases/auth.erli.ng_authorizationmodelreleases.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

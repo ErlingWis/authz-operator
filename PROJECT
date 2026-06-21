@@ -3,27 +3,27 @@
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
 cliVersion: 4.14.0
-domain: bridder.io
+domain: erli.ng
 layout:
-- go.kubebuilder.io/v4
+  - go.kubebuilder.io/v4
 projectName: bridder
 repo: erli.ng/authz-operator
 resources:
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: bridder.io
-  group: auth
-  kind: AuthorizationModule
-  path: erli.ng/authz-operator/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  domain: bridder.io
-  group: auth
-  kind: AuthorizationModelRelease
-  path: erli.ng/authz-operator/api/v1
-  version: v1
+  - api:
+      crdVersion: v1
+      namespaced: true
+    controller: true
+    domain: erli.ng
+    group: auth
+    kind: AuthorizationModule
+    path: erli.ng/authz-operator/api/v1
+    version: v1
+  - api:
+      crdVersion: v1
+      namespaced: true
+    domain: erli.ng
+    group: auth
+    kind: AuthorizationModelRelease
+    path: erli.ng/authz-operator/api/v1
+    version: v1
 version: "3"

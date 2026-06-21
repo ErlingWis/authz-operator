@@ -35,8 +35,8 @@ type AuthorizationModelReleaseReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationmodelreleases,verbs=get;list;watch
-// +kubebuilder:rbac:groups=auth.bridder.io,resources=authorizationmodelreleases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=auth.erli.ng,resources=authorizationmodelreleases,verbs=get;list;watch
+// +kubebuilder:rbac:groups=auth.erli.ng,resources=authorizationmodelreleases/status,verbs=get;update;patch
 
 func (r *AuthorizationModelReleaseReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)

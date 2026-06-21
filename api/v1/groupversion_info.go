@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package v1 contains API Schema definitions for the auth v1 API group.
 // +kubebuilder:object:generate=true
-// +groupName=auth.bridder.io
+// +groupName=auth.erli.ng
 package v1
 
 import (
@@ -27,7 +27,7 @@ import (
 var (
 	// SchemeGroupVersion is group version used to register these objects.
 	// This name is used by applyconfiguration generators (e.g. controller-gen).
-	SchemeGroupVersion = schema.GroupVersion{Group: "auth.bridder.io", Version: "v1"}
+	SchemeGroupVersion = schema.GroupVersion{Group: "auth.erli.ng", Version: "v1"}
 
 	// GroupVersion is an alias for SchemeGroupVersion, for backward compatibility.
 	GroupVersion = SchemeGroupVersion
