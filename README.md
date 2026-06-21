@@ -1,4 +1,4 @@
-# bridder
+# authz-operator
 // TODO(user): Add simple overview of use/purpose
 
 ## Description
@@ -14,15 +14,15 @@
 
 ### External dependencies
 
-Bridder does not deploy OpenFGA in the default release install. Create
+Authz Operator does not deploy OpenFGA in the default release install. Create
 that service separately, then provide its connection settings in the
-`bridder-system/bridder-config` Secret before deploying Bridder:
+`authz-operator-system/authz-operator-config` Secret before deploying Authz Operator:
 
 ```sh
-kubectl create namespace bridder-system
-kubectl -n bridder-system create secret generic bridder-config \
+kubectl create namespace authz-operator-system
+kubectl -n authz-operator-system create secret generic authz-operator-config \
   --from-literal=OPENFGA_API_URL=https://openfga.example.com \
-  --from-literal=OPENFGA_STORE_NAME=bridder
+  --from-literal=OPENFGA_STORE_NAME=authz-operator
 ```
 
 Optional keys are `OPENFGA_STORE_ID` and `OPENFGA_API_TOKEN`.
@@ -37,7 +37,7 @@ kubectl apply -k config/dev
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/bridder:tag
+make docker-build docker-push IMG=<some-registry>/authz-operator:tag
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified.
@@ -53,7 +53,7 @@ make install
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
 ```sh
-make deploy IMG=<some-registry>/bridder:tag
+make deploy IMG=<some-registry>/authz-operator:tag
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
@@ -69,11 +69,11 @@ kubectl apply -k config/samples/
 >**NOTE**: Ensure that the samples has default values to test it out.
 
 The controller creates the managed `AuthorizationModelRelease` in the
-`bridder-system` namespace. Promote a published candidate by patching that
+`authz-operator-system` namespace. Promote a published candidate by patching that
 release with the candidate hash:
 
 ```sh
-kubectl -n bridder-system patch authorizationmodelrelease bridder-authorization-model \
+kubectl -n authz-operator-system patch authorizationmodelrelease authz-operator-authorization-model \
   --type merge \
   -p '{"spec":{"stableModelHash":"<candidate-model-hash>"}}'
 ```
@@ -109,7 +109,7 @@ Following the options to release and provide this solution to the users.
 1. Build the installer for the image built and published in the registry:
 
 ```sh
-make build-installer IMG=<some-registry>/bridder:tag
+make build-installer IMG=<some-registry>/authz-operator:tag
 ```
 
 **NOTE:** The makefile target mentioned above generates an 'install.yaml'
@@ -123,7 +123,7 @@ Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
 the project, i.e.:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/bridder/<tag or branch>/dist/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/<org>/authz-operator/<tag or branch>/dist/install.yaml
 ```
 
 ### By providing a Helm Chart

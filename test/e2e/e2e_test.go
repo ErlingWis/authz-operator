@@ -34,16 +34,16 @@ import (
 )
 
 // namespace where the project is deployed in
-const namespace = "bridder-system"
+const namespace = "authz-operator-system"
 
 // serviceAccountName created for the project
-const serviceAccountName = "bridder-controller-manager"
+const serviceAccountName = "authz-operator-controller-manager"
 
 // metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "bridder-controller-manager-metrics-service"
+const metricsServiceName = "authz-operator-controller-manager-metrics-service"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
-const metricsRoleBindingName = "bridder-metrics-binding"
+const metricsRoleBindingName = "authz-operator-metrics-binding"
 
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
@@ -63,13 +63,13 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
 
-		By("creating the Bridder config secret")
-		cmd = exec.Command("kubectl", "-n", namespace, "create", "secret", "generic", "bridder-config",
-			"--from-literal=OPENFGA_API_URL=http://bridder-openfga:8080",
-			"--from-literal=OPENFGA_STORE_NAME=bridder",
+		By("creating the Authz Operator config secret")
+		cmd = exec.Command("kubectl", "-n", namespace, "create", "secret", "generic", "authz-operator-config",
+			"--from-literal=OPENFGA_API_URL=http://authz-operator-openfga:8080",
+			"--from-literal=OPENFGA_STORE_NAME=authz-operator",
 		)
 		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to create Bridder config secret")
+		Expect(err).NotTo(HaveOccurred(), "Failed to create Authz Operator config secret")
 
 		By("installing CRDs")
 		cmd = exec.Command("make", "install")
@@ -184,7 +184,7 @@ var _ = Describe("Manager", Ordered, func() {
 		It("should ensure the metrics endpoint is serving metrics", func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
 			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=bridder-metrics-reader",
+				"--clusterrole=authz-operator-metrics-reader",
 				fmt.Sprintf("--serviceaccount=%s:%s", namespace, serviceAccountName),
 			)
 			_, err := utils.Run(cmd)

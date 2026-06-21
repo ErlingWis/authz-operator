@@ -6,7 +6,7 @@ cliVersion: 4.14.0
 domain: erli.ng
 layout:
   - go.kubebuilder.io/v4
-projectName: bridder
+projectName: authz-operator
 repo: erli.ng/authz-operator
 resources:
   - api:

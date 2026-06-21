@@ -2,7 +2,7 @@ apiVersion: authz.erli.ng/v1
 kind: AuthorizationModule
 metadata:
   labels:
-    app.kubernetes.io/name: bridder
+    app.kubernetes.io/name: authz-operator
     app.kubernetes.io/managed-by: kustomize
   name: user-authorization
   namespace: core
@@ -13,7 +13,7 @@ apiVersion: authz.erli.ng/v1
 kind: AuthorizationModule
 metadata:
   labels:
-    app.kubernetes.io/name: bridder
+    app.kubernetes.io/name: authz-operator
     app.kubernetes.io/managed-by: kustomize
   name: namespace-authorization
   namespace: auth
@@ -55,7 +55,7 @@ apiVersion: authz.erli.ng/v1
 kind: AuthorizationModule
 metadata:
   labels:
-    app.kubernetes.io/name: bridder
+    app.kubernetes.io/name: authz-operator
     app.kubernetes.io/managed-by: kustomize
   name: scope-authorization
   namespace: auth

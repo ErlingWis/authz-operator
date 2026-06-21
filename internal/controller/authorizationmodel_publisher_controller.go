@@ -45,9 +45,9 @@ const (
 	openFGAStoreIDEnv   = "OPENFGA_STORE_ID"
 	openFGAStoreNameEnv = "OPENFGA_STORE_NAME"
 
-	defaultOpenFGAStoreName = "bridder"
+	defaultOpenFGAStoreName = "authz-operator"
 
-	authorizationModelReleaseName = "bridder-authorization-model"
+	authorizationModelReleaseName = "authz-operator-authorization-model"
 
 	annotationCandidateModelHash      = "authz.erli.ng/candidate-model-hash"
 	annotationCandidateOpenFGAModelID = "authz.erli.ng/candidate-openfga-model-id"
@@ -243,8 +243,8 @@ func (r *AuthorizationModelPublisherReconciler) patchCandidateReleaseState(ctx c
 				Namespace: namespacedName.Namespace,
 				Name:      namespacedName.Name,
 				Labels: map[string]string{
-					"app.kubernetes.io/name":       "bridder",
-					"app.kubernetes.io/managed-by": "bridder-controller",
+					"app.kubernetes.io/name":       "authz-operator",
+					"app.kubernetes.io/managed-by": "authz-operator-controller",
 				},
 			},
 			Spec: authv1.AuthorizationModelReleaseSpec{},

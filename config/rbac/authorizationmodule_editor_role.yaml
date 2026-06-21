@@ -1,4 +1,4 @@
-# This rule is not used by the project bridder itself.
+# This rule is not used by the project authz-operator itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
 # Grants permissions to create, update, and delete resources within the authz.erli.ng.
@@ -9,7 +9,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
-    app.kubernetes.io/name: bridder
+    app.kubernetes.io/name: authz-operator
     app.kubernetes.io/managed-by: kustomize
   name: authorizationmodule-editor-role
 rules:

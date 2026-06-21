@@ -39,10 +39,10 @@ type AuthorizationModuleReconciler struct {
 }
 
 const (
-	authorizationModelConfigMapName = "bridder-authorization-model"
+	authorizationModelConfigMapName = "authz-operator-authorization-model"
 	authorizationModelConfigMapKey  = "authorization-model.json"
 	authorizationModelHashKey       = "modelHash"
-	defaultModelNamespace           = "bridder-system"
+	defaultModelNamespace           = "authz-operator-system"
 )
 
 // +kubebuilder:rbac:groups=authz.erli.ng,resources=authorizationmodules,verbs=get;list;watch;create;update;patch;delete
@@ -149,8 +149,8 @@ func (r *AuthorizationModuleReconciler) applyAuthorizationModelConfigMap(ctx con
 		if configMap.Labels == nil {
 			configMap.Labels = map[string]string{}
 		}
-		configMap.Labels["app.kubernetes.io/name"] = "bridder"
-		configMap.Labels["app.kubernetes.io/managed-by"] = "bridder-controller"
+		configMap.Labels["app.kubernetes.io/name"] = "authz-operator"
+		configMap.Labels["app.kubernetes.io/managed-by"] = "authz-operator-controller"
 
 		if configMap.Data == nil {
 			configMap.Data = map[string]string{}
