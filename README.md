@@ -68,18 +68,18 @@ kubectl apply -k config/samples/
 
 >**NOTE**: Ensure that the samples has default values to test it out.
 
-The controller creates the managed `AuthorizationModelRelease` in the
-`authz-operator-system` namespace. Promote a published candidate by patching that
-release with the candidate hash:
+When all `AuthorizationModule` resources compile into a valid OpenFGA model, the
+controller uploads it immediately. After a successful upload, it writes
+OpenFGA connection settings to the `authz-operator-system/authz-operator-openfga-client-config`
+Secret:
 
 ```sh
-kubectl -n authz-operator-system patch authorizationmodelrelease authz-operator-authorization-model \
-  --type merge \
-  -p '{"spec":{"stableModelHash":"<candidate-model-hash>"}}'
+kubectl -n authz-operator-system get secret authz-operator-openfga-client-config \
+  -o jsonpath='{.data.client-configuration\.json}' | base64 -d
 ```
 
-The promoted release status contains the stable OpenFGA store and model IDs for
-external services that need to evaluate access against the stable model.
+The `client-configuration.json` value can be deserialized into
+`github.com/openfga/go-sdk/client.ClientConfiguration`.
 
 ### To Uninstall
 **Delete the instances (CRs) from the cluster:**

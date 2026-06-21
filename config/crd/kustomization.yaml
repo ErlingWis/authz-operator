@@ -3,7 +3,6 @@
 # It should be run by config/default
 resources:
   - bases/authz.erli.ng_authorizationmodules.yaml
-  - bases/authz.erli.ng_authorizationmodelreleases.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
