@@ -20,15 +20,21 @@ limitations under the License.
 package e2e
 
 import (
+	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	openfga "github.com/openfga/go-sdk"
+	openfgaclient "github.com/openfga/go-sdk/client"
 
 	"erli.ng/authz-operator/test/utils"
 )
@@ -45,6 +51,16 @@ const metricsServiceName = "authz-operator-controller-manager-metrics-service"
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
 const metricsRoleBindingName = "authz-operator-metrics-binding"
 
+const fixtureNamespace = "authz-e2e"
+
+const openFGADeploymentName = "authz-operator-openfga"
+const openFGAServiceName = "authz-operator-openfga"
+
+const openFGAClientConfigSecretName = "authz-operator-openfga-client-config"
+const openFGAClientConfigKey = "client-configuration.json"
+const openFGAClientConfigHashKey = "authz.erli.ng/model-hash"
+const openFGAClientConfigTimeKey = "authz.erli.ng/published-at"
+
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
 
@@ -52,8 +68,12 @@ var _ = Describe("Manager", Ordered, func() {
 	// enforce the restricted security policy to the namespace, installing CRDs,
 	// and deploying the controller.
 	BeforeAll(func() {
+		By("removing any previous manager namespace")
+		cmd := exec.Command("kubectl", "delete", "ns", namespace, "--ignore-not-found=true", "--wait=true")
+		_, _ = utils.Run(cmd)
+
 		By("creating manager namespace")
-		cmd := exec.Command("kubectl", "create", "ns", namespace)
+		cmd = exec.Command("kubectl", "create", "ns", namespace)
 		_, err := utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to create namespace")
 
@@ -63,13 +83,19 @@ var _ = Describe("Manager", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to label namespace with restricted policy")
 
-		By("creating the Authz Operator config secret")
-		cmd = exec.Command("kubectl", "-n", namespace, "create", "secret", "generic", "authz-operator-config",
-			"--from-literal=OPENFGA_API_URL=http://authz-operator-openfga:8080",
-			"--from-literal=OPENFGA_STORE_NAME=authz-operator",
+		By("deploying OpenFGA and the Authz Operator config secret")
+		cmd = exec.Command("kubectl", "apply", "-k", "config/dev/extras")
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to deploy OpenFGA and config secret")
+
+		By("waiting for OpenFGA to become available")
+		cmd = exec.Command("kubectl", "-n", namespace, "wait",
+			fmt.Sprintf("deployment/%s", openFGADeploymentName),
+			"--for=condition=Available",
+			"--timeout=5m",
 		)
 		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred(), "Failed to create Authz Operator config secret")
+		Expect(err).NotTo(HaveOccurred(), "Failed waiting for OpenFGA")
 
 		By("installing CRDs")
 		cmd = exec.Command("make", "install")
@@ -89,8 +115,16 @@ var _ = Describe("Manager", Ordered, func() {
 		cmd := exec.Command("kubectl", "delete", "pod", "curl-metrics", "-n", namespace)
 		_, _ = utils.Run(cmd)
 
+		By("cleaning up e2e fixture namespace")
+		cmd = exec.Command("kubectl", "delete", "ns", fixtureNamespace, "--ignore-not-found=true")
+		_, _ = utils.Run(cmd)
+
 		By("undeploying the controller-manager")
 		cmd = exec.Command("make", "undeploy")
+		_, _ = utils.Run(cmd)
+
+		By("deleting OpenFGA and Authz Operator config secret")
+		cmd = exec.Command("kubectl", "delete", "-k", "config/dev/extras", "--ignore-not-found=true")
 		_, _ = utils.Run(cmd)
 
 		By("uninstalling CRDs")
@@ -142,6 +176,33 @@ var _ = Describe("Manager", Ordered, func() {
 			} else {
 				fmt.Println("Failed to describe controller pod")
 			}
+
+			By("Fetching OpenFGA logs")
+			cmd = exec.Command("kubectl", "logs", fmt.Sprintf("deployment/%s", openFGADeploymentName), "-n", namespace)
+			openFGALogs, err := utils.Run(cmd)
+			if err == nil {
+				_, _ = fmt.Fprintf(GinkgoWriter, "OpenFGA logs:\n %s", openFGALogs)
+			} else {
+				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get OpenFGA logs: %s", err)
+			}
+
+			By("Fetching OpenFGA client configuration Secret")
+			cmd = exec.Command("kubectl", "get", "secret", openFGAClientConfigSecretName, "-n", namespace, "-o", "json")
+			secretOutput, err := utils.Run(cmd)
+			if err == nil {
+				_, _ = fmt.Fprintf(GinkgoWriter, "OpenFGA client configuration Secret:\n%s", secretOutput)
+			} else {
+				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get OpenFGA client configuration Secret: %s", err)
+			}
+
+			By("Fetching AuthorizationModules")
+			cmd = exec.Command("kubectl", "get", "authorizationmodules", "-A", "-o", "yaml")
+			modulesOutput, err := utils.Run(cmd)
+			if err == nil {
+				_, _ = fmt.Fprintf(GinkgoWriter, "AuthorizationModules:\n%s", modulesOutput)
+			} else {
+				_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get AuthorizationModules: %s", err)
+			}
 		}
 	})
 
@@ -179,6 +240,84 @@ var _ = Describe("Manager", Ordered, func() {
 				g.Expect(output).To(Equal("Running"), "Incorrect controller-manager pod status")
 			}
 			Eventually(verifyControllerUp).Should(Succeed())
+		})
+
+		It("should publish AuthorizationModules to OpenFGA and recover from an invalid module", func() {
+			ctx := context.Background()
+
+			By("creating the e2e fixture namespace")
+			Expect(applyYAML(fixtureNamespaceYAML())).To(Succeed())
+
+			By("applying a focused document authorization module")
+			Expect(applyYAML(documentAuthorizationModuleYAML())).To(Succeed())
+
+			By("waiting for the document authorization module to be published")
+			waitAuthorizationModuleReady(fixtureNamespace, "document-authorization", "True", "ModelPublished")
+
+			By("reading the generated OpenFGA client configuration Secret")
+			publishedSecret := waitOpenFGAClientConfigSecret()
+			Expect(publishedSecret.Annotations).To(HaveKey(openFGAClientConfigHashKey))
+			Expect(publishedSecret.Annotations[openFGAClientConfigHashKey]).NotTo(BeEmpty())
+			Expect(publishedSecret.Annotations).To(HaveKey(openFGAClientConfigTimeKey))
+			Expect(publishedSecret.Annotations[openFGAClientConfigTimeKey]).NotTo(BeEmpty())
+			Expect(publishedSecret.Config.ApiUrl).To(Equal(fmt.Sprintf("http://%s:8080", openFGAServiceName)))
+			Expect(publishedSecret.Config.StoreId).NotTo(BeEmpty())
+			Expect(publishedSecret.Config.AuthorizationModelId).NotTo(BeEmpty())
+
+			By("connecting to OpenFGA through a local port-forward")
+			portForwardURL := startOpenFGAPortForward()
+			clientConfig := publishedSecret.Config
+			clientConfig.ApiUrl = portForwardURL
+			openFGAClient, err := openfgaclient.NewSdkClient(&clientConfig)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("reading the uploaded authorization model from OpenFGA")
+			modelResponse, err := openFGAClient.ReadAuthorizationModel(ctx).Execute()
+			Expect(err).NotTo(HaveOccurred())
+			authorizationModel, ok := modelResponse.GetAuthorizationModelOk()
+			Expect(ok).To(BeTrue())
+			Expect(typeHasRelations(*authorizationModel, "document", "viewer", "can_view")).To(BeTrue())
+
+			By("writing test tuples and checking authorization decisions")
+			_, err = openFGAClient.Write(ctx).
+				Options(openfgaclient.ClientWriteOptions{
+					Conflict: openfgaclient.ClientWriteConflictOptions{
+						OnDuplicateWrites: openfgaclient.CLIENT_WRITE_REQUEST_ON_DUPLICATE_WRITES_IGNORE,
+					},
+				}).
+				Body(openfgaclient.ClientWriteRequest{
+					Writes: []openfgaclient.ClientTupleKey{{
+						User:     "user:alice",
+						Relation: "viewer",
+						Object:   "document:e2e-doc",
+					}},
+				}).
+				Execute()
+			Expect(err).NotTo(HaveOccurred())
+			expectCheckAllowed(ctx, openFGAClient, "user:alice", "can_view", "document:e2e-doc", true)
+			expectCheckAllowed(ctx, openFGAClient, "user:bob", "can_view", "document:e2e-doc", false)
+
+			By("applying an invalid duplicate document module")
+			Expect(applyYAML(duplicateDocumentAuthorizationModuleYAML())).To(Succeed())
+			waitAuthorizationModuleReady(fixtureNamespace, "document-authorization", "False", "ModelCompileFailed")
+			waitAuthorizationModuleReady(fixtureNamespace, "duplicate-document-authorization", "False", "ModelCompileFailed")
+
+			By("verifying the last published Secret was not replaced")
+			failedSecret := waitOpenFGAClientConfigSecret()
+			Expect(failedSecret.Annotations[openFGAClientConfigHashKey]).To(Equal(publishedSecret.Annotations[openFGAClientConfigHashKey]))
+			Expect(failedSecret.Config.StoreId).To(Equal(publishedSecret.Config.StoreId))
+			Expect(failedSecret.Config.AuthorizationModelId).To(Equal(publishedSecret.Config.AuthorizationModelId))
+
+			By("deleting the invalid module and waiting for recovery")
+			cmd := exec.Command("kubectl", "-n", fixtureNamespace, "delete", "authorizationmodule", "duplicate-document-authorization")
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			waitAuthorizationModuleReady(fixtureNamespace, "document-authorization", "True", "ModelPublished")
+
+			By("verifying recovery keeps the published model available")
+			recoveredSecret := waitOpenFGAClientConfigSecret()
+			Expect(recoveredSecret.Annotations[openFGAClientConfigHashKey]).To(Equal(publishedSecret.Annotations[openFGAClientConfigHashKey]))
+			Expect(recoveredSecret.Config.AuthorizationModelId).To(Equal(publishedSecret.Config.AuthorizationModelId))
 		})
 
 		It("should ensure the metrics endpoint is serving metrics", func() {
@@ -336,6 +475,218 @@ func getMetricsOutput() (string, error) {
 	By("getting the curl-metrics logs")
 	cmd := exec.Command("kubectl", "logs", "curl-metrics", "-n", namespace)
 	return utils.Run(cmd)
+}
+
+func applyYAML(manifest string) error {
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(manifest)
+	_, err := utils.Run(cmd)
+	return err
+}
+
+func fixtureNamespaceYAML() string {
+	return fmt.Sprintf(`apiVersion: v1
+kind: Namespace
+metadata:
+  name: %s
+`, fixtureNamespace)
+}
+
+func documentAuthorizationModuleYAML() string {
+	return fmt.Sprintf(`apiVersion: authz.erli.ng/v1
+kind: AuthorizationModule
+metadata:
+  name: document-authorization
+  namespace: %s
+spec:
+  resource: document
+  roles:
+    viewer:
+      subjects:
+      - type: user
+  permissions:
+    can_view:
+      anyOf:
+      - viewer
+`, fixtureNamespace)
+}
+
+func duplicateDocumentAuthorizationModuleYAML() string {
+	return fmt.Sprintf(`apiVersion: authz.erli.ng/v1
+kind: AuthorizationModule
+metadata:
+  name: duplicate-document-authorization
+  namespace: %s
+spec:
+  resource: document
+  roles:
+    editor:
+      subjects:
+      - type: user
+`, fixtureNamespace)
+}
+
+func waitAuthorizationModuleReady(moduleNamespace, name, status, reason string) {
+	Eventually(func(g Gomega) {
+		condition, err := authorizationModuleReadyCondition(moduleNamespace, name)
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(condition.Status).To(Equal(status))
+		g.Expect(condition.Reason).To(Equal(reason))
+	}, 3*time.Minute, time.Second).Should(Succeed())
+}
+
+func authorizationModuleReadyCondition(moduleNamespace, name string) (conditionStatus, error) {
+	cmd := exec.Command("kubectl", "-n", moduleNamespace, "get", "authorizationmodule", name, "-o", "json")
+	output, err := utils.Run(cmd)
+	if err != nil {
+		return conditionStatus{}, err
+	}
+
+	var module authorizationModule
+	if err := json.Unmarshal([]byte(output), &module); err != nil {
+		return conditionStatus{}, err
+	}
+	for _, condition := range module.Status.Conditions {
+		if condition.Type == "Ready" {
+			return condition, nil
+		}
+	}
+	return conditionStatus{}, fmt.Errorf("Ready condition not found on %s/%s", moduleNamespace, name)
+}
+
+func waitOpenFGAClientConfigSecret() openFGAClientConfigSecret {
+	var secret openFGAClientConfigSecret
+	Eventually(func(g Gomega) {
+		var err error
+		secret, err = readOpenFGAClientConfigSecret()
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Expect(secret.Config.StoreId).NotTo(BeEmpty())
+		g.Expect(secret.Config.AuthorizationModelId).NotTo(BeEmpty())
+	}, 3*time.Minute, time.Second).Should(Succeed())
+	return secret
+}
+
+func readOpenFGAClientConfigSecret() (openFGAClientConfigSecret, error) {
+	cmd := exec.Command("kubectl", "-n", namespace, "get", "secret", openFGAClientConfigSecretName, "-o", "json")
+	output, err := utils.Run(cmd)
+	if err != nil {
+		return openFGAClientConfigSecret{}, err
+	}
+
+	var secret kubernetesSecret
+	if err := json.Unmarshal([]byte(output), &secret); err != nil {
+		return openFGAClientConfigSecret{}, err
+	}
+	encodedConfig := secret.Data[openFGAClientConfigKey]
+	if encodedConfig == "" {
+		return openFGAClientConfigSecret{}, fmt.Errorf("%s key is missing", openFGAClientConfigKey)
+	}
+	configJSON, err := base64.StdEncoding.DecodeString(encodedConfig)
+	if err != nil {
+		return openFGAClientConfigSecret{}, err
+	}
+
+	var config openfgaclient.ClientConfiguration
+	if err := json.Unmarshal(configJSON, &config); err != nil {
+		return openFGAClientConfigSecret{}, err
+	}
+
+	return openFGAClientConfigSecret{
+		Annotations: secret.Metadata.Annotations,
+		Config:      config,
+	}, nil
+}
+
+func startOpenFGAPortForward() string {
+	port := freeTCPPort()
+	cmd := exec.Command("kubectl", "-n", namespace, "port-forward", fmt.Sprintf("svc/%s", openFGAServiceName), fmt.Sprintf("%d:8080", port))
+	projectDir, err := utils.GetProjectDir()
+	Expect(err).NotTo(HaveOccurred())
+	cmd.Dir = projectDir
+	cmd.Env = append(os.Environ(), "GO111MODULE=on")
+	cmd.Stdout = GinkgoWriter
+	cmd.Stderr = GinkgoWriter
+	Expect(cmd.Start()).To(Succeed())
+
+	DeferCleanup(func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		}
+	})
+
+	address := fmt.Sprintf("127.0.0.1:%d", port)
+	Eventually(func() error {
+		conn, err := net.DialTimeout("tcp", address, time.Second)
+		if err != nil {
+			return err
+		}
+		return conn.Close()
+	}, 30*time.Second, 500*time.Millisecond).Should(Succeed())
+
+	return fmt.Sprintf("http://%s", address)
+}
+
+func freeTCPPort() int {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		Expect(listener.Close()).To(Succeed())
+	}()
+
+	return listener.Addr().(*net.TCPAddr).Port
+}
+
+func typeHasRelations(model openfga.AuthorizationModel, typeName string, relations ...string) bool {
+	for _, typeDefinition := range model.GetTypeDefinitions() {
+		if typeDefinition.Type != typeName {
+			continue
+		}
+		typeRelations := typeDefinition.GetRelations()
+		for _, relation := range relations {
+			if _, ok := typeRelations[relation]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func expectCheckAllowed(ctx context.Context, client *openfgaclient.OpenFgaClient, user, relation, object string, allowed bool) {
+	response, err := client.Check(ctx).
+		Body(openfgaclient.ClientCheckRequest{
+			User:     user,
+			Relation: relation,
+			Object:   object,
+		}).
+		Execute()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(response.GetAllowed()).To(Equal(allowed))
+}
+
+type openFGAClientConfigSecret struct {
+	Annotations map[string]string
+	Config      openfgaclient.ClientConfiguration
+}
+
+type kubernetesSecret struct {
+	Metadata struct {
+		Annotations map[string]string `json:"annotations"`
+	} `json:"metadata"`
+	Data map[string]string `json:"data"`
+}
+
+type authorizationModule struct {
+	Status struct {
+		Conditions []conditionStatus `json:"conditions"`
+	} `json:"status"`
+}
+
+type conditionStatus struct {
+	Type   string `json:"type"`
+	Status string `json:"status"`
+	Reason string `json:"reason"`
 }
 
 // tokenRequest is a simplified representation of the Kubernetes TokenRequest API response,
